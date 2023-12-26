@@ -204,6 +204,22 @@ impl Data {
         self.ok = self.ok.close_connection(v);
         self
     }
+
+    /// Size of escaped data
+    ///
+    /// ### Example
+    /// ```rust
+    /// use assuan_server::response::Data;
+    ///
+    /// let data = Data::new("one two")?;
+    /// assert_eq!(data.size(), 7);
+    /// let data = Data::new("one\ntwo")?;
+    /// assert_eq!(data.size(), 9);
+    /// # Ok::<_, assuan_server::response::TooLong>(())
+    /// ```
+    pub fn size(&self) -> usize {
+        self.data_resp.size() - Self::PREFIX.len()
+    }
 }
 
 impl Default for Data {
@@ -244,6 +260,8 @@ impl Ok {
     /// response. So the response data may be up to 996 bytes long.
     pub const MAX_BYTES: usize = 996;
 
+    const PREFIX: &'static str = "OK ";
+
     /// Construct `OK` response with default message
     ///
     /// Default message is "success".
@@ -261,10 +279,33 @@ impl Ok {
         })
     }
 
+    /// Appends data to the response
+    ///
+    /// Returns error if response exceeds the limit set by assuan protocol (see [Ok::MAX_BYTES])
+    pub fn append(&mut self, data: &str) -> Result<(), TooLong> {
+        self.resp.append(data)
+    }
+
     /// Indicated whether connection needs to be closed when response is sent
     pub fn close_connection(mut self, v: bool) -> Self {
         self.close_conn = v;
         self
+    }
+
+    /// Size of escaped debug info
+    ///
+    /// ### Example
+    /// ```rust
+    /// use assuan_server::response::Ok;
+    ///
+    /// let resp = Ok::with_debug_info("one two")?;
+    /// assert_eq!(resp.size(), 7);
+    /// let resp = Ok::with_debug_info("one\ntwo")?;
+    /// assert_eq!(resp.size(), 9);
+    /// # Ok::<_, assuan_server::response::TooLong>(())
+    /// ```
+    pub fn size(&self) -> usize {
+        self.resp.size() - Self::PREFIX.len()
     }
 }
 
@@ -375,9 +416,22 @@ mod builder {
         pub fn pop(&mut self) -> Option<char> {
             let s = std::str::from_utf8(&self.resp[..self.size])
                 .expect("response is guaranteed to be a valid utf8 string");
-            let (pos, x) = s.char_indices().next_back()?;
-            self.size = pos;
-            Some(x)
+            let mut chars = s.char_indices().rev();
+            let (last_pos, last_char) = chars.next()?;
+            let mid = chars.next();
+            let possibly_percent = chars.next();
+            match (possibly_percent, mid) {
+                (Some((pos, '%')), Some((_, mid))) => {
+                    let decoded = crate::percent_decode::decode_one_char(mid, last_char)
+                        .expect("response line is guaranteed to have a valid percent encoding");
+                    self.size = pos;
+                    Some(decoded)
+                }
+                _ => {
+                    self.size = last_pos;
+                    Some(last_char)
+                }
+            }
         }
 
         /// Writes response to the writer
@@ -396,7 +450,7 @@ mod builder {
     impl zeroize::DefaultIsZeroes for ResponseLine {}
 
     /// Escapes char if it needs to be escaped, returns `None` otherwise
-    fn optionally_escape(x: char) -> Option<&'static str> {
+    pub fn optionally_escape(x: char) -> Option<&'static str> {
         match x {
             '%' => Some("%25"),
             '\r' => Some("%0D"),
@@ -404,5 +458,81 @@ mod builder {
             '\\' => Some("%5C"),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rand::{seq::SliceRandom, Rng, RngCore};
+
+    use super::*;
+
+    const CHARS: &[&[char]] = &[
+        // 1-byte characters
+        &['1', '2', '3', 'd', 'o', 'g'],
+        // 2-bytes characters
+        &['Γ', 'Δ', 'Ε', 'Ë', 'Ж', 'ʡ'],
+        // 3-bytes characters
+        // Note: first four characters are 1-byte, but they are escaped via
+        // 3 bytes in the response
+        &['\n', '\r', '\\', '%', 'ࢨ', 'ࣁ'],
+        // 4-bytes characters
+        &['🍆', '🌚', '🐩', '💘', '😀', '🚭'],
+    ];
+
+    #[test]
+    fn chars_have_expected_size() {
+        for (i, chars) in CHARS.iter().enumerate() {
+            for x in *chars {
+                if let Some(encoding) = builder::optionally_escape(*x) {
+                    assert_eq!(encoding.len(), i + 1)
+                } else {
+                    assert_eq!(x.len_utf8(), i + 1);
+                }
+            }
+        }
+    }
+
+    fn gen_str_of_len(
+        rng: &mut impl RngCore,
+        len_in_bytes: usize,
+    ) -> impl Iterator<Item = char> + '_ {
+        let mut already_generated = 0;
+        std::iter::from_fn(move || {
+            if already_generated < len_in_bytes {
+                let max_size = 4.min(len_in_bytes - already_generated);
+                let char_size = rng.gen_range(1..=max_size);
+                let random_char = CHARS[char_size - 1].choose(rng).unwrap();
+                already_generated += char_size;
+                Some(*random_char)
+            } else {
+                None
+            }
+        })
+    }
+
+    #[test]
+    fn ok_response_max_size() {
+        let mut rng = rand_dev::DevRng::new();
+
+        let debug_info: String = gen_str_of_len(&mut rng, Ok::MAX_BYTES).collect();
+
+        let mut resp = Ok::with_debug_info(&debug_info).unwrap();
+        resp.append("q").unwrap_err();
+    }
+
+    #[test]
+    fn data_resp_max_size() {
+        let mut rng = rand_dev::DevRng::new();
+
+        let data: String = gen_str_of_len(&mut rng, Data::MAX_BYTES).collect();
+
+        let mut resp = Data::new(&data).unwrap();
+        resp.append("q").unwrap_err();
+
+        for x in data.chars().rev() {
+            assert_eq!(resp.pop(), Some(x));
+        }
+        assert_eq!(resp.pop(), None);
     }
 }

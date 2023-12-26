@@ -8,3 +8,7 @@ edition = "2021"
 [dependencies]
 either = "1"
 zeroize = "1"
+
+[dev-dependencies]
+rand = "0.8"
+rand_dev = "0.1"
