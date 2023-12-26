@@ -106,7 +106,7 @@ mod test {
     fn read_chunk_by_chunk<'a>(
         chunks: &'a [&'a [u8]],
     ) -> ReadChunks<impl Iterator<Item = &'a [u8]>> {
-        ReadChunks::from_iter(chunks.into_iter().copied())
+        ReadChunks::from_iter(chunks.iter().copied())
     }
 
     impl<'a, I> io::Read for ReadChunks<I>

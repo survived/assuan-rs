@@ -139,7 +139,7 @@ impl<S, L: router::CmdList<S>> AssuanServer<S, L> {
             .map(|args| percent_decode::percent_decode(args).collect::<Result<String, _>>())
             .transpose()
             .map_err(|_| ServeError::MalformedPercentEncoding)?;
-        let args = args.as_ref().map(|a| a.as_str());
+        let args = args.as_deref();
 
         // Route and execute the command
         let response = self.cmd_handlers.handle(cmd, &mut self.service, args);
@@ -152,7 +152,7 @@ impl<S, L: router::CmdList<S>> AssuanServer<S, L> {
 
         // Handle `unknown command` error
         let response =
-            response.unwrap_or_else(|| Err((ErrorCode::ASS_UNKNOWN_CMD, "Unknown command")));
+            response.unwrap_or(Err((ErrorCode::ASS_UNKNOWN_CMD, "Unknown command")));
 
         match response {
             Ok(resp) => {

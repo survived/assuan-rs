@@ -1,3 +1,4 @@
+#[allow(clippy::large_enum_variant)]
 pub enum Response {
     Data(Data),
     Ok(Ok),
@@ -79,6 +80,12 @@ impl Data {
 pub struct Ok {
     resp: ResponseLine,
     close_conn: bool,
+}
+
+impl Default for Ok {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Ok {

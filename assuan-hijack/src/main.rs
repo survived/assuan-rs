@@ -12,7 +12,7 @@ impl<S, O: io::Write> Capture<S, O> {
         self.buffer.extend_from_slice(data);
 
         while let Some(pos) = self.buffer.iter().position(|x| *x == b'\n') {
-            self.output.write_all(&self.prepend)?;
+            self.output.write_all(self.prepend)?;
             self.output.write_all(&self.buffer[..pos])?;
             self.output.write_all(b"\\n\n")?;
             self.output.flush()?;

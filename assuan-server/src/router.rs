@@ -74,6 +74,12 @@ pub struct SystemCmds<L = Nil> {
     tail: L,
 }
 
+impl Default for SystemCmds {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SystemCmds {
     pub fn new() -> Self {
         Self::with_tail(Nil)

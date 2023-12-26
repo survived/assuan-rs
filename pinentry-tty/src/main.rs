@@ -209,7 +209,7 @@ fn render_options<'a, T>(
             }
         }
     }
-    return Ok(None);
+    Ok(None)
 }
 
 impl PinentryTty {

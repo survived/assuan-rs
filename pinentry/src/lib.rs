@@ -57,6 +57,7 @@ macro_rules! define_setters {
             self.$var = $var.map(str::to_string);
             $(
                 if let Some(var) = &mut self.$var {
+                    #[allow(clippy::redundant_closure_call)]
                     let _: () = $modify(var);
                 }
             )?
@@ -102,13 +103,13 @@ impl<S: PinentryCmds> PinentryServer<S> {
     fn get_pin(&mut self, _args: Option<&str>) -> Result<Response, HandleError<S::Error>> {
         self.cmds
             .get_pin(
-                self.error_text.as_ref().map(String::as_str),
+                self.error_text.as_deref(),
                 self.window_title
                     .as_ref()
                     .map(String::as_ref)
                     .unwrap_or("Enter PIN"),
-                self.desc.as_ref().map(String::as_str),
-                self.prompt.as_ref().map(String::as_str).unwrap_or("PIN: "),
+                self.desc.as_deref(),
+                self.prompt.as_deref().unwrap_or("PIN: "),
             )
             .map_err(HandleError::PinentryCmd)?
             .ok_or(HandleError::NoPin)
@@ -117,13 +118,13 @@ impl<S: PinentryCmds> PinentryServer<S> {
     fn _confirm(&mut self, one_button: bool) -> Result<Response, HandleError<S::Error>> {
         let buttons = if one_button {
             Buttons {
-                ok: self.button_ok.as_ref().map(String::as_str).unwrap_or("OK"),
+                ok: self.button_ok.as_deref().unwrap_or("OK"),
                 not_ok: None,
                 cancel: None,
             }
         } else {
             let mut btns = Buttons {
-                ok: self.button_ok.as_ref().map(String::as_str).unwrap_or("OK"),
+                ok: self.button_ok.as_deref().unwrap_or("OK"),
                 not_ok: self.button_not_ok.as_ref().map(String::as_ref),
                 cancel: self.button_cancel.as_ref().map(String::as_ref),
             };
@@ -135,11 +136,8 @@ impl<S: PinentryCmds> PinentryServer<S> {
         let response = self
             .cmds
             .confirm(
-                self.error_text.as_ref().map(String::as_str),
-                self.window_title
-                    .as_ref()
-                    .map(String::as_str)
-                    .unwrap_or("Confirm"),
+                self.error_text.as_deref(),
+                self.window_title.as_deref().unwrap_or("Confirm"),
                 self.desc.as_ref().map(String::as_ref),
                 buttons,
             )
@@ -167,7 +165,7 @@ impl<S: PinentryCmds> PinentryServer<S> {
             return Ok(Response::ok_with_debug_info("ignored, no args")?);
         };
 
-        let (var, value) = args.split_once(&[' ', '=']).unwrap_or_else(|| (args, ""));
+        let (var, value) = args.split_once([' ', '=']).unwrap_or((args, ""));
 
         match var {
             "ttyname" => {
