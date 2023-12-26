@@ -1,6 +1,6 @@
 use std::fmt;
 
-use assuan_server::Response;
+use assuan_server::response::SecretData;
 use either::Either;
 use pinentry::ConfirmAction;
 
@@ -23,10 +23,8 @@ impl pinentry::PinentryCmds for PinentryTty {
         window_title: &str,
         desc: Option<&str>,
         prompt: &str,
-    ) -> Result<Option<Response>, Self::Error> {
+    ) -> Result<Option<SecretData>, Self::Error> {
         use std::io::Write as _;
-        use termion::input::TermRead;
-        use termion_raw2::IntoRawMode;
 
         let (mut tty_in, mut tty_out) = self.open_tty()?;
 
@@ -42,21 +40,13 @@ impl pinentry::PinentryCmds for PinentryTty {
         write!(tty_out, "{}", prompt).map_err(Error::WriteTty)?;
         tty_out.flush().map_err(Error::WriteTty)?;
 
-        let pin = {
-            let _tty_out = BorrowedTtyOut(&mut tty_out)
-                .into_raw_mode()
-                .map_err(Error::RawMode)?;
-            tty_in.read_line()
-        };
-        let Some(pin) = pin.map_err(Error::ReadPin)? else {
+        let Some(pin) = read_pin(&mut tty_in, &mut tty_out)? else {
             writeln!(tty_out, "Aborted.").map_err(Error::WriteTty)?;
             return Ok(None);
         };
         writeln!(tty_out).map_err(Error::WriteTty)?;
 
-        Response::data(&pin)
-            .map(Some)
-            .map_err(|_| Error::PinTooLong)
+        Ok(Some(pin))
     }
 
     fn confirm(
@@ -102,6 +92,42 @@ impl pinentry::PinentryCmds for PinentryTty {
         writeln!(tty_out).map_err(Error::WriteTty)?;
         result
     }
+}
+
+fn read_pin(
+    tty_in: &mut impl std::io::Read,
+    tty_out: &mut (impl std::io::Write + std::os::fd::AsRawFd),
+) -> Result<Option<SecretData>, Error> {
+    use termion::event::Key;
+    use termion::input::TermRead;
+    use termion_raw2::IntoRawMode;
+
+    let mut resp = SecretData::default();
+
+    let _tty_out = BorrowedTtyOut(tty_out)
+        .into_raw_mode()
+        .map_err(Error::RawMode)?;
+    for k in tty_in.keys() {
+        match k.map_err(Error::ReadPin)? {
+            Key::Char('\n') | Key::Char('\r') => return Ok(Some(resp)),
+            Key::Char(x) => {
+                let mut s = [0u8; 4];
+                let s = x.encode_utf8(&mut s);
+                resp.append(s).map_err(|_| Error::PinTooLong)?;
+            }
+            Key::Backspace => {
+                let _ = resp.pop();
+            }
+            Key::Ctrl('c')
+            | Key::Ctrl('C')
+            | Key::Ctrl('d')
+            | Key::Ctrl('D')
+            | Key::Null
+            | Key::Esc => return Ok(None),
+            _ => continue,
+        }
+    }
+    todo!()
 }
 
 #[derive(Debug)]
