@@ -151,8 +151,7 @@ impl<S, L: router::CmdList<S>> AssuanServer<S, L> {
             .map(|resp| resp.as_ref().map_err(|(code, desc)| (*code, desc.as_str())));
 
         // Handle `unknown command` error
-        let response =
-            response.unwrap_or(Err((ErrorCode::ASS_UNKNOWN_CMD, "Unknown command")));
+        let response = response.unwrap_or(Err((ErrorCode::ASS_UNKNOWN_CMD, "Unknown command")));
 
         match response {
             Ok(resp) => {
