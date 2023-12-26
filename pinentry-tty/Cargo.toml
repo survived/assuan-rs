@@ -1,0 +1,15 @@
+[package]
+name = "pinentry-tty"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+assuan-server = { path = "../assuan-server" }
+pinentry = { path = "../pinentry" }
+
+termion = "2"
+termion-raw2 = { git = "https://github.com/survived/termion-raw2" }
+either = "1"
+heapless = "0.8"
