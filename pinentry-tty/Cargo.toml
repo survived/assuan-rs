@@ -10,6 +10,6 @@ assuan-server = { path = "../assuan-server" }
 pinentry = { path = "../pinentry" }
 
 termion = "2"
-termion-raw2 = { path = "../../termion-raw2" }
+termion-raw2 = { git = "https://github.com/survived/termion-raw2" }
 either = "1"
 heapless = "0.8"
