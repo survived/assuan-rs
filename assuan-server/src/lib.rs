@@ -169,10 +169,10 @@ impl<S, L: router::CmdList<S>> AssuanServer<S, L> {
 
 fn error(code: ErrorCode, desc: impl AsRef<str>) -> Result<ResponseLine, response::TooLong> {
     response::ResponseLine::new()
-        .append("ERR ")?
-        .append(&code.0.to_string())?
-        .append(" ")?
-        .append(desc.as_ref())
+        .chain("ERR ")?
+        .chain(&code.0.to_string())?
+        .chain(" ")?
+        .chain(desc.as_ref())
 }
 
 enum ServeError {

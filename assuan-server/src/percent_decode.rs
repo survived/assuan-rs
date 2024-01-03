@@ -18,12 +18,7 @@ impl<'s> PercentDecoder<'s> {
                     return Err(MalformedEncoding);
                 }
 
-                let a = a.to_digit(16).ok_or(MalformedEncoding)?;
-                let b = b.to_digit(16).ok_or(MalformedEncoding)?;
-
-                char::from_u32(a * 0x10 + b)
-                    .ok_or(MalformedEncoding)
-                    .map(Some)
+                decode_one_char(a, b).map(Some)
             }
             Some(x) => Ok(Some(x)),
             None => Ok(None),
@@ -37,6 +32,13 @@ impl<'s> Iterator for PercentDecoder<'s> {
     fn next(&mut self) -> Option<Self::Item> {
         self.decode_next().transpose()
     }
+}
+
+pub fn decode_one_char(a: char, b: char) -> Result<char, MalformedEncoding> {
+    let a = a.to_digit(16).ok_or(MalformedEncoding)?;
+    let b = b.to_digit(16).ok_or(MalformedEncoding)?;
+
+    char::from_u32(a * 0x10 + b).ok_or(MalformedEncoding)
 }
 
 #[derive(Debug)]

@@ -1,6 +1,9 @@
 use core::fmt;
 
-pub use assuan_server::{AssuanServer, HasErrorCode, Response};
+pub use assuan_server::{
+    response::{Response, SecretData},
+    AssuanServer, HasErrorCode,
+};
 
 pub struct PinentryServer<S: PinentryCmds> {
     cmds: S,
@@ -33,7 +36,7 @@ pub trait PinentryCmds {
         window_title: &str,
         desc: Option<&str>,
         prompt: &str,
-    ) -> Result<Option<Response>, Self::Error>;
+    ) -> Result<Option<SecretData>, Self::Error>;
 
     fn confirm(
         &mut self,
@@ -113,6 +116,7 @@ impl<S: PinentryCmds> PinentryServer<S> {
             )
             .map_err(HandleError::PinentryCmd)?
             .ok_or(HandleError::NoPin)
+            .map(Into::into)
     }
 
     fn _confirm(&mut self, one_button: bool) -> Result<Response, HandleError<S::Error>> {
