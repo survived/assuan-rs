@@ -96,7 +96,7 @@ impl pinentry::PinentryCmds for PinentryTty {
 
 fn read_pin(
     tty_in: &mut impl std::io::Read,
-    tty_out: &mut (impl std::io::Write + std::os::fd::AsRawFd),
+    tty_out: &mut (impl std::io::Write + std::os::fd::AsFd),
 ) -> Result<Option<SecretData>, Error> {
     use termion::event::Key;
     use termion::input::TermRead;
@@ -104,9 +104,7 @@ fn read_pin(
 
     let mut resp = SecretData::default();
 
-    let _tty_out = BorrowedTtyOut(tty_out)
-        .into_raw_mode()
-        .map_err(Error::RawMode)?;
+    let _tty_out = tty_out.into_raw_mode().map_err(Error::RawMode)?;
     for k in tty_in.keys() {
         match k.map_err(Error::ReadPin)? {
             Key::Char('\n') | Key::Char('\r') => return Ok(Some(resp)),
@@ -161,7 +159,7 @@ impl<'a, T> ConfirmOption<'a, T> {
 /// Renders options, asks user to choose one of them, returns whichever was chosen
 fn render_options<'a, T>(
     tty_in: &mut impl std::io::Read,
-    tty_out: &mut (impl std::io::Write + std::os::fd::AsRawFd),
+    tty_out: &mut (impl std::io::Write + std::os::fd::AsFd),
     options: &'a [ConfirmOption<T>],
 ) -> std::io::Result<Option<&'a T>> {
     use termion::style::{NoUnderline, Underline};
@@ -193,7 +191,7 @@ fn render_options<'a, T>(
     use std::io::Write;
     use termion::input::TermRead;
     use termion_raw2::IntoRawMode;
-    let mut tty_out = BorrowedTtyOut(tty_out).into_raw_mode()?;
+    let mut tty_out = tty_out.into_raw_mode()?;
 
     for key in tty_in.events() {
         tty_out.flush()?;
@@ -241,13 +239,7 @@ fn render_options<'a, T>(
 impl PinentryTty {
     fn open_tty(
         &self,
-    ) -> Result<
-        (
-            impl std::io::Read,
-            impl std::io::Write + std::os::fd::AsRawFd,
-        ),
-        Error,
-    > {
+    ) -> Result<(impl std::io::Read, impl std::io::Write + std::os::fd::AsFd), Error> {
         let tty_in = if let Some(path) = &self.tty {
             let fd = std::fs::OpenOptions::new()
                 .read(true)
@@ -279,7 +271,7 @@ impl PinentryTty {
 }
 
 /// `Either` was supposed to be used instead of `TtyOut` but `either` doesn't implement
-/// `AsRawFd` trait
+/// `AsFd` trait
 enum TtyOut {
     Stdout(std::io::Stdout),
     File(std::fs::File),
@@ -298,29 +290,12 @@ impl std::io::Write for TtyOut {
         }
     }
 }
-impl std::os::fd::AsRawFd for TtyOut {
-    fn as_raw_fd(&self) -> std::os::fd::RawFd {
+impl std::os::fd::AsFd for TtyOut {
+    fn as_fd(&self) -> std::os::fd::BorrowedFd {
         match self {
-            Self::Stdout(stdout) => stdout.as_raw_fd(),
-            Self::File(file) => file.as_raw_fd(),
+            Self::Stdout(stdout) => stdout.as_fd(),
+            Self::File(file) => file.as_fd(),
         }
-    }
-}
-
-/// Strangely, AsRawFd is not implemented for `&mut T` where T: AsRawFd,
-/// so this is workaround to this
-struct BorrowedTtyOut<'a, W>(&'a mut W);
-impl<'a, W: std::io::Write> std::io::Write for BorrowedTtyOut<'a, W> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.0.write(buf)
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.0.flush()
-    }
-}
-impl<'a, W: std::os::fd::AsRawFd> std::os::fd::AsRawFd for BorrowedTtyOut<'a, W> {
-    fn as_raw_fd(&self) -> std::os::fd::RawFd {
-        self.0.as_raw_fd()
     }
 }
 

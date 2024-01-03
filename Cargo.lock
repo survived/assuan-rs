@@ -207,7 +207,7 @@ dependencies = [
 [[package]]
 name = "termion-raw2"
 version = "0.1.0"
-source = "git+https://github.com/survived/termion-raw2#39f8d6cdbe614c0639600bf775fa83db27bbf30e"
+source = "git+https://github.com/survived/termion-raw2#48e2c0bfba2fc0d03d758d118de8eed73a5b521f"
 dependencies = [
  "libc",
 ]
