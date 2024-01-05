@@ -1,5 +1,7 @@
 //! Response of assuan server
 
+use std::fmt;
+
 /// Assuan server successful response
 ///
 /// Any response indicating success of requested operation. Responses
@@ -320,6 +322,18 @@ impl zeroize::DefaultIsZeroes for Ok {}
 /// Response exceeds limit of [MAX_LINE_SIZE](crate::MAX_LINE_SIZE)
 #[derive(Debug)]
 pub struct TooLong;
+
+impl fmt::Display for TooLong {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("response is too long")
+    }
+}
+
+impl crate::HasErrorCode for TooLong {
+    fn code(&self) -> crate::ErrorCode {
+        crate::ErrorCode::INTERNAL
+    }
+}
 
 pub(crate) use builder::ResponseLine;
 mod builder {
