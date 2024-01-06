@@ -96,7 +96,7 @@ impl fmt::Display for AskPinError {
 pub fn dialog<'a, T>(
     tty_in: &mut impl io::Read,
     tty_out: &mut (impl io::Write + std::os::fd::AsFd),
-    message: &impl fmt::Display,
+    message: impl fmt::Display,
     options: &'a [(&str, T)],
 ) -> Result<Option<&'a T>, DialogError> {
     let options = options.iter().fold(
@@ -127,7 +127,8 @@ impl<'a, T> DialogOption<'a, T> {
             |&short: &char| existing_options.iter().any(|o| Some(short) == o.short);
         let available_short = text
             .chars()
-            .filter(|x| x.is_alphabetic()).find(|x| !short_already_used(x));
+            .filter(|x| x.is_alphabetic())
+            .find(|x| !short_already_used(x));
 
         Self {
             short: available_short,
