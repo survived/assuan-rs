@@ -98,9 +98,7 @@ fn read_pin(
     tty_in: &mut impl std::io::Read,
     tty_out: &mut (impl std::io::Write + std::os::fd::AsFd),
 ) -> Result<Option<SecretData>, Error> {
-    use termion::event::Key;
-    use termion::input::TermRead;
-    use termion_raw2::IntoRawMode;
+    use termion::{event::Key, input::TermRead, raw::IntoRawMode};
 
     let mut resp = SecretData::default();
 
@@ -189,8 +187,7 @@ fn render_options<'a, T>(
     tty_out.flush()?;
 
     use std::io::Write;
-    use termion::input::TermRead;
-    use termion_raw2::IntoRawMode;
+    use termion::{input::TermRead, raw::IntoRawMode};
     let mut tty_out = tty_out.into_raw_mode()?;
 
     for key in tty_in.events() {

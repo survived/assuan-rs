@@ -121,7 +121,6 @@ dependencies = [
  "heapless",
  "pinentry",
  "termion",
- "termion-raw2",
 ]
 
 [[package]]
@@ -194,22 +193,14 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "termion"
-version = "2.0.3"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4648c7def6f2043b2568617b9f9b75eae88ca185dbc1f1fda30e95a85d49d7d"
+checksum = "417813675a504dfbbf21bfde32c03e5bf9f2413999962b479023c02848c1c7a5"
 dependencies = [
  "libc",
  "libredox",
  "numtoa",
  "redox_termios",
-]
-
-[[package]]
-name = "termion-raw2"
-version = "0.1.0"
-source = "git+https://github.com/survived/termion-raw2#48e2c0bfba2fc0d03d758d118de8eed73a5b521f"
-dependencies = [
- "libc",
 ]
 
 [[package]]
