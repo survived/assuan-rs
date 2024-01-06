@@ -24,29 +24,22 @@ impl pinentry::PinentryCmds for PinentryTty {
         desc: Option<&str>,
         prompt: &str,
     ) -> Result<Option<SecretData>, Self::Error> {
-        use std::io::Write as _;
-
         let (mut tty_in, mut tty_out) = self.open_tty()?;
 
-        if let Some(error) = error {
-            writeln!(tty_out, "Error: {error}").map_err(Error::WriteTty)?;
-        }
-        writeln!(tty_out, "{}", window_title).map_err(Error::WriteTty)?;
-        if let Some(desc) = &desc {
-            writeln!(tty_out, "{}", desc).map_err(Error::WriteTty)?;
-        }
-        writeln!(tty_out).map_err(Error::WriteTty)?;
+        let mut pin = SecretData::default();
+        let pin_submitted = pinentry_tty::ask_pin(
+            &mut tty_in,
+            &mut tty_out,
+            &messages::PinPrompt {
+                error,
+                title: window_title,
+                desc,
+                prompt,
+            },
+            &mut pin,
+        )?;
 
-        write!(tty_out, "{}", prompt).map_err(Error::WriteTty)?;
-        tty_out.flush().map_err(Error::WriteTty)?;
-
-        let Some(pin) = read_pin(&mut tty_in, &mut tty_out)? else {
-            writeln!(tty_out, "Aborted.").map_err(Error::WriteTty)?;
-            return Ok(None);
-        };
-        writeln!(tty_out).map_err(Error::WriteTty)?;
-
-        Ok(Some(pin))
+        Ok(Some(pin).filter(|_| pin_submitted))
     }
 
     fn confirm(
@@ -92,38 +85,6 @@ impl pinentry::PinentryCmds for PinentryTty {
         writeln!(tty_out).map_err(Error::WriteTty)?;
         result
     }
-}
-
-fn read_pin(
-    tty_in: &mut impl std::io::Read,
-    tty_out: &mut (impl std::io::Write + std::os::fd::AsFd),
-) -> Result<Option<SecretData>, Error> {
-    use termion::{event::Key, input::TermRead, raw::IntoRawMode};
-
-    let mut resp = SecretData::default();
-
-    let _tty_out = tty_out.into_raw_mode().map_err(Error::RawMode)?;
-    for k in tty_in.keys() {
-        match k.map_err(Error::ReadPin)? {
-            Key::Char('\n') | Key::Char('\r') => return Ok(Some(resp)),
-            Key::Char(x) => {
-                let mut s = [0u8; 4];
-                let s = x.encode_utf8(&mut s);
-                resp.append(s).map_err(|_| Error::PinTooLong)?;
-            }
-            Key::Backspace => {
-                let _ = resp.pop();
-            }
-            Key::Ctrl('c')
-            | Key::Ctrl('C')
-            | Key::Ctrl('d')
-            | Key::Ctrl('D')
-            | Key::Null
-            | Key::Esc => return Ok(None),
-            _ => continue,
-        }
-    }
-    todo!()
 }
 
 #[derive(Debug)]
@@ -300,9 +261,10 @@ impl std::os::fd::AsFd for TtyOut {
 enum Error {
     OpenTty(std::io::Error),
     WriteTty(std::io::Error),
-    ReadPin(std::io::Error),
+    ReadTty(std::io::Error),
     ReadOption(std::io::Error),
     RawMode(std::io::Error),
+    AskPin(pinentry_tty::AskPinError),
     OutputNotTty,
     PinTooLong,
     Internal(InternalError),
@@ -318,9 +280,10 @@ impl fmt::Display for Error {
         match self {
             Self::OpenTty(err) => write!(f, "open tty: {err}"),
             Self::WriteTty(err) => write!(f, "write to tty: {err}"),
-            Self::ReadPin(err) => write!(f, "read pin: {err}"),
+            Self::ReadTty(err) => write!(f, "read from tty: {err}"),
             Self::ReadOption(err) => write!(f, "read option: {err}"),
             Self::RawMode(err) => write!(f, "enable raw mode: {err}"),
+            Self::AskPin(err) => write!(f, "get pin error: {err}"),
             Self::OutputNotTty => write!(f, "output is not a tty"),
             Self::PinTooLong => write!(f, "pin is too long"),
             Self::Internal(err) => write!(f, "internal error: {err}"),
@@ -341,9 +304,10 @@ impl assuan_server::HasErrorCode for Error {
         match self {
             Error::OpenTty(_) => assuan_server::ErrorCode::ASS_GENERAL,
             Error::WriteTty(_) => assuan_server::ErrorCode::ASS_GENERAL,
-            Error::ReadPin(_) => assuan_server::ErrorCode::ASS_GENERAL,
+            Error::ReadTty(_) => assuan_server::ErrorCode::ASS_GENERAL,
             Error::ReadOption(_) => assuan_server::ErrorCode::ASS_GENERAL,
             Error::RawMode(_) => assuan_server::ErrorCode::ASS_GENERAL,
+            Error::AskPin(_) => assuan_server::ErrorCode::ASS_GENERAL,
             Error::OutputNotTty => assuan_server::ErrorCode::ASS_GENERAL,
             Error::PinTooLong => assuan_server::ErrorCode::TOO_LARGE,
             Error::Internal(_) => assuan_server::ErrorCode::INTERNAL,
@@ -360,6 +324,44 @@ impl From<InternalError> for Error {
 impl From<assuan_server::response::TooLong> for Error {
     fn from(err: assuan_server::response::TooLong) -> Self {
         Self::Internal(InternalError::DebugInfoTooLong(err))
+    }
+}
+
+impl From<pinentry_tty::AskPinError> for Error {
+    fn from(err: pinentry_tty::AskPinError) -> Self {
+        match err {
+            pinentry_tty::AskPinError::Read(err) => Error::ReadTty(err),
+            pinentry_tty::AskPinError::Write(err) => Error::WriteTty(err),
+            pinentry_tty::AskPinError::RawMode(err) => Error::RawMode(err),
+            pinentry_tty::AskPinError::PinTooLong => Error::PinTooLong,
+            _ => Error::AskPin(err),
+        }
+    }
+}
+
+mod messages {
+    use std::fmt;
+
+    pub struct PinPrompt<'a> {
+        pub error: Option<&'a str>,
+        pub title: &'a str,
+        pub desc: Option<&'a str>,
+        pub prompt: &'a str,
+    }
+
+    impl<'a> fmt::Display for PinPrompt<'a> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            if let Some(error) = self.error {
+                writeln!(f, "Error: {error}")?;
+            }
+            writeln!(f, "{}", self.title)?;
+            if let Some(desc) = self.desc {
+                writeln!(f, "{desc}")?;
+            }
+            writeln!(f)?;
+
+            write!(f, "{}", self.prompt)
+        }
     }
 }
 
