@@ -49,149 +49,30 @@ impl pinentry::PinentryCmds for PinentryTty {
         desc: Option<&str>,
         buttons: pinentry::Buttons,
     ) -> Result<ConfirmAction, Self::Error> {
-        use std::io::Write as _;
-
         let (mut tty_in, mut tty_out) = self.open_tty()?;
 
-        if let Some(error) = error {
-            writeln!(tty_out, "{error}").map_err(Error::WriteTty)?;
-        }
-
-        writeln!(tty_out, "{}", window_title).map_err(Error::WriteTty)?;
-        if let Some(desc) = desc {
-            writeln!(tty_out, "{}", desc).map_err(Error::WriteTty)?;
-        }
-
-        let mut options = heapless::Vec::<ConfirmOption<ConfirmAction>, 3>::new();
-
-        options
-            .push(ConfirmOption::new(buttons.ok, ConfirmAction::Ok))
-            .expect("storage can fit exactly 3 elements");
+        let mut options = Vec::with_capacity(3);
+        options.push((buttons.ok, ConfirmAction::Ok));
 
         if let Some(not_ok) = buttons.not_ok {
-            options
-                .push(ConfirmOption::new(not_ok, ConfirmAction::NotOk))
-                .expect("storage can fit exactly 3 elements")
+            options.push((not_ok, ConfirmAction::NotOk));
         }
         if let Some(cancel) = buttons.cancel {
-            options
-                .push(ConfirmOption::new(cancel, ConfirmAction::Canceled))
-                .expect("storage can fit exactly 3 elements")
+            options.push((cancel, ConfirmAction::Canceled));
         }
 
-        let result = render_options(&mut tty_in, &mut tty_out, &options)
-            .map(|x| *x.unwrap_or(&ConfirmAction::Canceled))
-            .map_err(Error::ReadOption);
-        writeln!(tty_out).map_err(Error::WriteTty)?;
-        result
+        let choice = pinentry_tty::dialog(
+            &mut tty_in,
+            &mut tty_out,
+            &messages::Confirm {
+                error,
+                title: window_title,
+                desc,
+            },
+            &options,
+        )?;
+        Ok(*choice.unwrap_or(&ConfirmAction::Canceled))
     }
-}
-
-#[derive(Debug)]
-struct ConfirmOption<'a, T> {
-    text: &'a str,
-    short: Option<char>,
-    value: T,
-}
-
-impl<'a, T> ConfirmOption<'a, T> {
-    pub fn new(text: &'a str, value: T) -> Self {
-        let short = text.chars().find(|x| x.is_alphabetic());
-        Self { text, short, value }
-    }
-
-    pub fn render(&self, tty_out: &mut impl std::io::Write) -> std::io::Result<()> {
-        if let Some(short) = self.short {
-            use termion::style::{NoUnderline, Underline};
-            let (left, right) = self
-                .text
-                .split_once(short)
-                .ok_or_else(|| std::io::Error::other("bug: `short` character not found"))?;
-            write!(tty_out, "{left}{Underline}{short}{NoUnderline}{right}")?;
-        } else {
-            write!(tty_out, "{}", self.text)?;
-        }
-        Ok(())
-    }
-}
-
-/// Renders options, asks user to choose one of them, returns whichever was chosen
-fn render_options<'a, T>(
-    tty_in: &mut impl std::io::Read,
-    tty_out: &mut (impl std::io::Write + std::os::fd::AsFd),
-    options: &'a [ConfirmOption<T>],
-) -> std::io::Result<Option<&'a T>> {
-    use termion::style::{NoUnderline, Underline};
-    if options.len() > 9 {
-        return Err(std::io::Error::other(
-            "confirm dialog can not render more than 9 options",
-        ));
-    }
-    for (i, option) in (1..).zip(options) {
-        write!(tty_out, "  {Underline}{i}{NoUnderline} ")?;
-        option.render(tty_out)?;
-        writeln!(tty_out)?;
-    }
-
-    write!(tty_out, "Type [")?;
-    for i in 1..=options.len() {
-        write!(tty_out, "{i}")?;
-    }
-    for short in options
-        .iter()
-        .flat_map(|o| o.short)
-        .map(|s| s.to_lowercase())
-    {
-        write!(tty_out, "{short}")?;
-    }
-    write!(tty_out, "] : ")?;
-    tty_out.flush()?;
-
-    use std::io::Write;
-    use termion::{input::TermRead, raw::IntoRawMode};
-    let mut tty_out = tty_out.into_raw_mode()?;
-
-    for key in tty_in.events() {
-        tty_out.flush()?;
-        let termion::event::Event::Key(key) = key? else {
-            continue;
-        };
-        match key {
-            termion::event::Key::Char(x) => {
-                if let Some(index) = x.to_digit(10) {
-                    let Ok(index): Result<usize, _> = index.try_into() else {
-                        continue;
-                    };
-                    let Some(index) = index.checked_sub(1) else {
-                        continue;
-                    };
-                    let Some(option) = options.get(index) else {
-                        continue;
-                    };
-                    write!(tty_out, "{}", x)?;
-                    return Ok(Some(&option.value));
-                } else {
-                    let Some(option) = options.iter().find(|o| {
-                        o.short
-                            .map(|s| s.to_lowercase().eq(x.to_lowercase()))
-                            .unwrap_or(false)
-                    }) else {
-                        continue;
-                    };
-                    write!(tty_out, "{}", x)?;
-                    return Ok(Some(&option.value));
-                }
-            }
-            termion::event::Key::Ctrl('c' | 'C' | 'd' | 'D') => {
-                write!(tty_out, "Aborted.")?;
-                return Ok(None);
-            }
-            _ => {
-                // ignore
-            }
-        }
-    }
-    Ok(None)
 }
 
 impl PinentryTty {
@@ -262,9 +143,9 @@ enum Error {
     OpenTty(std::io::Error),
     WriteTty(std::io::Error),
     ReadTty(std::io::Error),
-    ReadOption(std::io::Error),
     RawMode(std::io::Error),
     AskPin(pinentry_tty::AskPinError),
+    Dialog(pinentry_tty::DialogError),
     OutputNotTty,
     PinTooLong,
     Internal(InternalError),
@@ -281,9 +162,9 @@ impl fmt::Display for Error {
             Self::OpenTty(err) => write!(f, "open tty: {err}"),
             Self::WriteTty(err) => write!(f, "write to tty: {err}"),
             Self::ReadTty(err) => write!(f, "read from tty: {err}"),
-            Self::ReadOption(err) => write!(f, "read option: {err}"),
             Self::RawMode(err) => write!(f, "enable raw mode: {err}"),
             Self::AskPin(err) => write!(f, "get pin error: {err}"),
+            Self::Dialog(err) => write!(f, "dialog error: {err}"),
             Self::OutputNotTty => write!(f, "output is not a tty"),
             Self::PinTooLong => write!(f, "pin is too long"),
             Self::Internal(err) => write!(f, "internal error: {err}"),
@@ -305,9 +186,9 @@ impl assuan_server::HasErrorCode for Error {
             Error::OpenTty(_) => assuan_server::ErrorCode::ASS_GENERAL,
             Error::WriteTty(_) => assuan_server::ErrorCode::ASS_GENERAL,
             Error::ReadTty(_) => assuan_server::ErrorCode::ASS_GENERAL,
-            Error::ReadOption(_) => assuan_server::ErrorCode::ASS_GENERAL,
             Error::RawMode(_) => assuan_server::ErrorCode::ASS_GENERAL,
             Error::AskPin(_) => assuan_server::ErrorCode::ASS_GENERAL,
+            Error::Dialog(_) => assuan_server::ErrorCode::ASS_GENERAL,
             Error::OutputNotTty => assuan_server::ErrorCode::ASS_GENERAL,
             Error::PinTooLong => assuan_server::ErrorCode::TOO_LARGE,
             Error::Internal(_) => assuan_server::ErrorCode::INTERNAL,
@@ -339,6 +220,17 @@ impl From<pinentry_tty::AskPinError> for Error {
     }
 }
 
+impl From<pinentry_tty::DialogError> for Error {
+    fn from(err: pinentry_tty::DialogError) -> Self {
+        match err {
+            pinentry_tty::DialogError::Read(err) => Error::ReadTty(err),
+            pinentry_tty::DialogError::Write(err) => Error::WriteTty(err),
+            pinentry_tty::DialogError::RawMode(err) => Error::RawMode(err),
+            _ => Error::Dialog(err),
+        }
+    }
+}
+
 mod messages {
     use std::fmt;
 
@@ -361,6 +253,25 @@ mod messages {
             writeln!(f)?;
 
             write!(f, "{}", self.prompt)
+        }
+    }
+
+    pub struct Confirm<'a> {
+        pub error: Option<&'a str>,
+        pub title: &'a str,
+        pub desc: Option<&'a str>,
+    }
+
+    impl<'a> fmt::Display for Confirm<'a> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            if let Some(error) = self.error {
+                writeln!(f, "Error: {error}")?;
+            }
+            writeln!(f, "{}", self.title)?;
+            if let Some(desc) = self.desc {
+                writeln!(f, "{desc}")?;
+            }
+            writeln!(f)
         }
     }
 }
