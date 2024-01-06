@@ -369,30 +369,5 @@ fn main() {
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
 
-    server
-        .serve_client(&mut Glue {
-            read: stdin,
-            write: stdout,
-        })
-        .unwrap();
-}
-
-struct Glue<R, W> {
-    read: R,
-    write: W,
-}
-
-impl<R: std::io::Read, W> std::io::Read for Glue<R, W> {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.read.read(buf)
-    }
-}
-
-impl<R, W: std::io::Write> std::io::Write for Glue<R, W> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.write.write(buf)
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.write.flush()
-    }
+    server.serve_client(stdin, stdout).unwrap();
 }

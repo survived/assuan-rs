@@ -1,3 +1,53 @@
+//! Assuan server
+//!
+//! This crate helps implementing inter-process communication (IPC) servers based on [Assuan protocol]
+//! which is mainly used in GPG software. One reason someone would want to use this library is to replace
+//! components of GPG ecosystem with pure Rust implementation.
+//!
+//! As an example, here's a typical communication between pinentry server `S` (that's used to ask user
+//! a pin) and client `C` (most commonly, GPG software that performs some cryptographic operation):
+//! ```text
+//! S: OK ready
+//! C: SETDESC Please provide your PIN for decryption key
+//! S: OK success
+//! C: SETPROMPT PIN:
+//! S: OK success
+//! C: GETPIN
+//! S: D 1234
+//! S: OK success
+//! C: BYE
+//! S: OK success
+//! ```
+//!
+//! This crate takes the most boilerplate from implementing the server, namely:
+//! * Percent-encoding and decoding certain characters of requests and responses
+//! * Enforcing limitations set by the assuan spec, such as the [max line size](MAX_LINE_SIZE)
+//! * Understanding which command is being called by the client and invoking appropriate method
+//! * Zeroizing responses in memory that contain sensitive data
+//! * Handling common assuan commands such as `BYE` and `NOP`
+//!
+//! ### Minimal example
+//! ```rust
+#![doc = include_str!("../examples/greeter.rs")]
+//! ```
+//!
+//! You can check it out via:
+//! ```bash
+//! cargo run --example greeter
+//! ```
+//!
+//! Example of using it:
+//! ```text
+//! S: OK how can I serve you?
+//! C: GREET Bob
+//! S: D Hello, Bob! My name's Alice
+//! S: OK success
+//! C: BYE
+//! S: OK success
+//! ```
+//!
+//! [Assuan protocol]: https://www.gnupg.org/documentation/manuals/assuan/index.html
+
 use core::fmt;
 use std::io;
 
@@ -63,7 +113,15 @@ impl<S, L: router::CmdList<S>> AssuanServer<S, L> {
         }
     }
 
-    pub fn serve_client<C>(&mut self, conn: &mut C) -> io::Result<()>
+    pub fn serve_client<R, W>(&mut self, read: R, write: W) -> io::Result<()>
+    where
+        R: io::Read,
+        W: io::Write,
+    {
+        self.serve_client_conn(&mut Conn { read, write })
+    }
+
+    pub fn serve_client_conn<C>(&mut self, conn: &mut C) -> io::Result<()>
     where
         C: io::Read + io::Write,
     {
@@ -190,5 +248,26 @@ impl From<line_reader::ReadLineError> for ServeError {
             line_reader::ReadLineError::Read(err) => Self::Read(err),
             line_reader::ReadLineError::LineTooLong => Self::ReceivedLineTooLong,
         }
+    }
+}
+
+struct Conn<R, W> {
+    read: R,
+    write: W,
+}
+
+impl<R: io::Read, W> io::Read for Conn<R, W> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.read.read(buf)
+    }
+}
+
+impl<R, W: io::Write> io::Write for Conn<R, W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.write.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.write.flush()
     }
 }
