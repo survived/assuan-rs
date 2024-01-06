@@ -271,7 +271,7 @@ mod messages {
             if let Some(desc) = self.desc {
                 writeln!(f, "{desc}")?;
             }
-            writeln!(f)
+            Ok(())
         }
     }
 }
