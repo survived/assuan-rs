@@ -64,7 +64,8 @@ impl PushPop<char> for assuan_server::response::SecretData {
 
 impl<T> PushPop<T> for Vec<T> {
     fn push(&mut self, x: T) -> Result<(), T> {
-        Ok(self.push(x))
+        self.push(x);
+        Ok(())
     }
 
     fn pop(&mut self) -> Option<T> {
@@ -101,7 +102,7 @@ pub fn dialog<'a, T>(
     let options = options.iter().fold(
         Vec::with_capacity(options.len()),
         |mut acc, (text, value)| {
-            let option = DialogOption::new(&text, value, &acc);
+            let option = DialogOption::new(text, value, &acc);
             acc.push(option);
             acc
         },
@@ -126,9 +127,7 @@ impl<'a, T> DialogOption<'a, T> {
             |&short: &char| existing_options.iter().any(|o| Some(short) == o.short);
         let available_short = text
             .chars()
-            .filter(|x| x.is_alphabetic())
-            .filter(|x| !short_already_used(x))
-            .next();
+            .filter(|x| x.is_alphabetic()).find(|x| !short_already_used(x));
 
         Self {
             short: available_short,
@@ -143,7 +142,7 @@ impl<'a, T> DialogOption<'a, T> {
             let (left, right) = self
                 .text
                 .split_once(short)
-                .ok_or_else(|| BugReason::ShortCharacterNotFound)?;
+                .ok_or(BugReason::ShortCharacterNotFound)?;
             write!(tty_out, "{left}{Underline}{short}{NoUnderline}{right}")
                 .map_err(DialogError::Write)?;
         } else {
@@ -201,7 +200,7 @@ fn render_options<'a, T>(
                         continue;
                     };
                     write!(tty_out, "{}", x).map_err(DialogError::Write)?;
-                    return Ok(Some(&option.value));
+                    return Ok(Some(option.value));
                 } else {
                     let Some(option) = options.iter().find(|o| {
                         o.short
@@ -211,7 +210,7 @@ fn render_options<'a, T>(
                         continue;
                     };
                     write!(tty_out, "{}", x).map_err(DialogError::Write)?;
-                    return Ok(Some(&option.value));
+                    return Ok(Some(option.value));
                 }
             }
             termion::event::Key::Ctrl('c' | 'C' | 'd' | 'D') => {
