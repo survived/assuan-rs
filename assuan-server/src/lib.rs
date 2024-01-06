@@ -48,6 +48,8 @@
 //!
 //! [Assuan protocol]: https://www.gnupg.org/documentation/manuals/assuan/index.html
 
+#![forbid(unused_crate_dependencies)]
+
 use core::fmt;
 use std::io;
 

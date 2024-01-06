@@ -1,3 +1,5 @@
+#![forbid(unused_crate_dependencies)]
+
 use std::fmt;
 
 use assuan_server::response::SecretData;
