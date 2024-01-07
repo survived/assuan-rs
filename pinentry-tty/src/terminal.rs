@@ -1,11 +1,11 @@
 use std::{fmt, io};
 
 pub trait Terminal: io::Read + io::Write {
-    fn keys<'t>(
-        &'t mut self,
+    fn keys(
+        &mut self,
     ) -> io::Result<(
-        impl Iterator<Item = io::Result<Key>> + 't,
-        impl io::Write + 't,
+        impl Iterator<Item = io::Result<Key>> + '_,
+        impl io::Write + '_,
     )>;
 }
 
@@ -14,11 +14,11 @@ where
     L: Terminal,
     R: Terminal,
 {
-    fn keys<'t>(
-        &'t mut self,
+    fn keys(
+        &mut self,
     ) -> io::Result<(
-        impl Iterator<Item = io::Result<Key>> + 't,
-        impl io::Write + 't,
+        impl Iterator<Item = io::Result<Key>> + '_,
+        impl io::Write + '_,
     )> {
         use either::{Left, Right};
         match self {
@@ -93,11 +93,11 @@ where
     I: io::Read,
     O: io::Write + std::os::fd::AsFd,
 {
-    fn keys<'t>(
-        &'t mut self,
+    fn keys(
+        &mut self,
     ) -> io::Result<(
-        impl Iterator<Item = io::Result<Key>> + 't,
-        impl io::Write + 't,
+        impl Iterator<Item = io::Result<Key>> + '_,
+        impl io::Write + '_,
     )> {
         use termion::input::TermRead;
         use termion::raw::IntoRawMode;
