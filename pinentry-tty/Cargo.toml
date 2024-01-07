@@ -11,4 +11,3 @@ pinentry = { path = "../pinentry" }
 
 termion = "3"
 either = "1"
-heapless = "0.8"

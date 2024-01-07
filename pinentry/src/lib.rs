@@ -1,3 +1,5 @@
+#![forbid(unused_crate_dependencies)]
+
 use core::fmt;
 
 pub use assuan_server::{
