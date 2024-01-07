@@ -26,12 +26,11 @@ impl pinentry::PinentryCmds for PinentryTty {
         desc: Option<&str>,
         prompt: &str,
     ) -> Result<Option<SecretData>, Self::Error> {
-        let (mut tty_in, mut tty_out) = self.open_tty()?;
+        let mut tty = self.open_tty2()?;
 
         let mut pin = SecretData::default();
         let pin_submitted = pinentry_tty::ask_pin(
-            &mut tty_in,
-            &mut tty_out,
+            &mut tty,
             &messages::PinPrompt {
                 error,
                 title: window_title,
@@ -108,6 +107,26 @@ impl PinentryTty {
         };
 
         Ok((tty_in, tty_out))
+    }
+
+    fn open_tty2(&self) -> Result<impl pinentry_tty::Terminal, Error> {
+        if let Some(path) = &self.tty {
+            let tty_in = std::fs::OpenOptions::new()
+                .read(true)
+                .open(path)
+                .map_err(Error::OpenTty)?;
+            let tty_out = std::fs::OpenOptions::new()
+                .write(true)
+                .open(path)
+                .map_err(Error::OpenTty)?;
+            Ok(Either::Left(
+                pinentry_tty::Termion::new(tty_in, tty_out).map_err(|_| Error::OutputNotTty)?,
+            ))
+        } else {
+            Ok(Either::Right(
+                pinentry_tty::Termion::new_stdio().map_err(|_| Error::OutputNotTty)?,
+            ))
+        }
     }
 }
 

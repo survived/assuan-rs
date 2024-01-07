@@ -1,32 +1,31 @@
 use std::{fmt, io};
 
+pub use terminal::{Terminal, Termion};
+
+pub mod terminal;
+
 pub fn ask_pin(
-    tty_in: &mut impl io::Read,
-    tty_out: &mut (impl io::Write + std::os::fd::AsFd),
+    tty: &mut impl Terminal,
     prompt: impl fmt::Display,
     out: &mut impl PushPop<char>,
 ) -> Result<bool, AskPinError> {
-    write!(tty_out, "{prompt}").map_err(AskPinError::Write)?;
-    tty_out.flush().map_err(AskPinError::Write)?;
+    write!(tty, "{prompt}").map_err(AskPinError::Write)?;
+    tty.flush().map_err(AskPinError::Write)?;
 
-    if read_pin(tty_in, tty_out, out)? {
-        writeln!(tty_out).map_err(AskPinError::Write)?;
+    if read_pin(tty, out)? {
+        writeln!(tty).map_err(AskPinError::Write)?;
         Ok(true)
     } else {
-        writeln!(tty_out, "Aborted.").map_err(AskPinError::Write)?;
+        writeln!(tty, "Aborted.").map_err(AskPinError::Write)?;
         Ok(false)
     }
 }
 
-fn read_pin(
-    tty_in: &mut impl io::Read,
-    tty_out: &mut (impl io::Write + std::os::fd::AsFd),
-    out: &mut impl PushPop<char>,
-) -> Result<bool, AskPinError> {
-    use termion::{event::Key, input::TermRead, raw::IntoRawMode};
+fn read_pin(tty: &mut impl Terminal, out: &mut impl PushPop<char>) -> Result<bool, AskPinError> {
+    use terminal::Key;
 
-    let _tty_out = tty_out.into_raw_mode().map_err(AskPinError::RawMode)?;
-    for k in tty_in.keys() {
+    let (keys, _tty_out) = tty.keys().map_err(AskPinError::RawMode)?;
+    for k in keys {
         match k.map_err(AskPinError::Read)? {
             Key::Char('\n') | Key::Char('\r') => return Ok(true),
             Key::Char(x) => {
