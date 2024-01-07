@@ -1,8 +1,22 @@
+#![forbid(unused_crate_dependencies)]
+
 use std::{fmt, io};
 
 pub use terminal::{Terminal, Termion};
 
+pub mod server;
 pub mod terminal;
+
+/// Builds Assuan server that implements a pinentry-tty tool
+///
+/// Alias for wrapping [server::PinentryTty] into [pinentry::PinentryServer] and
+/// converting into [assuan_server::AssuanServer].
+pub fn server() -> assuan_server::AssuanServer<
+    pinentry::PinentryServer<server::PinentryTty>,
+    impl assuan_server::router::CmdList<pinentry::PinentryServer<server::PinentryTty>>,
+> {
+    pinentry::PinentryServer::new(server::PinentryTty::default()).build_assuan_server()
+}
 
 pub fn ask_pin(
     tty: &mut impl Terminal,
