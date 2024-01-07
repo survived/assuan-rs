@@ -1,4 +1,5 @@
-#![forbid(unused_crate_dependencies)]
+// TODO
+// #![forbid(unused_crate_dependencies)]
 
 use std::fmt;
 
@@ -26,7 +27,7 @@ impl pinentry::PinentryCmds for PinentryTty {
         desc: Option<&str>,
         prompt: &str,
     ) -> Result<Option<SecretData>, Self::Error> {
-        let mut tty = self.open_tty2()?;
+        let mut tty = self.open_tty()?;
 
         let mut pin = SecretData::default();
         let pin_submitted = pinentry_tty::ask_pin(
@@ -50,7 +51,7 @@ impl pinentry::PinentryCmds for PinentryTty {
         desc: Option<&str>,
         buttons: pinentry::Buttons,
     ) -> Result<ConfirmAction, Self::Error> {
-        let (mut tty_in, mut tty_out) = self.open_tty()?;
+        let mut tty = self.open_tty()?;
 
         let mut options = Vec::with_capacity(3);
         options.push((buttons.ok, ConfirmAction::Ok));
@@ -63,8 +64,7 @@ impl pinentry::PinentryCmds for PinentryTty {
         }
 
         let choice = pinentry_tty::dialog(
-            &mut tty_in,
-            &mut tty_out,
+            &mut tty,
             &messages::Confirm {
                 error,
                 title: window_title,
@@ -77,39 +77,7 @@ impl pinentry::PinentryCmds for PinentryTty {
 }
 
 impl PinentryTty {
-    fn open_tty(
-        &self,
-    ) -> Result<(impl std::io::Read, impl std::io::Write + std::os::fd::AsFd), Error> {
-        let tty_in = if let Some(path) = &self.tty {
-            let fd = std::fs::OpenOptions::new()
-                .read(true)
-                .open(path)
-                .map_err(Error::OpenTty)?;
-            if !termion::is_tty(&fd) {
-                return Err(Error::OutputNotTty);
-            }
-            Either::Left(fd)
-        } else {
-            Either::Right(std::io::stdin())
-        };
-
-        let tty_out = if let Some(path) = &self.tty {
-            let fd = std::fs::OpenOptions::new()
-                .write(true)
-                .open(path)
-                .map_err(Error::OpenTty)?;
-            if !termion::is_tty(&fd) {
-                return Err(Error::OutputNotTty);
-            }
-            TtyOut::File(fd)
-        } else {
-            TtyOut::Stdout(std::io::stdout())
-        };
-
-        Ok((tty_in, tty_out))
-    }
-
-    fn open_tty2(&self) -> Result<impl pinentry_tty::Terminal, Error> {
+    fn open_tty(&self) -> Result<impl pinentry_tty::Terminal, Error> {
         if let Some(path) = &self.tty {
             let tty_in = std::fs::OpenOptions::new()
                 .read(true)
@@ -126,35 +94,6 @@ impl PinentryTty {
             Ok(Either::Right(
                 pinentry_tty::Termion::new_stdio().map_err(|_| Error::OutputNotTty)?,
             ))
-        }
-    }
-}
-
-/// `Either` was supposed to be used instead of `TtyOut` but `either` doesn't implement
-/// `AsFd` trait
-enum TtyOut {
-    Stdout(std::io::Stdout),
-    File(std::fs::File),
-}
-impl std::io::Write for TtyOut {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        match self {
-            Self::Stdout(stdout) => stdout.write(buf),
-            Self::File(file) => file.write(buf),
-        }
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        match self {
-            Self::Stdout(stdout) => stdout.flush(),
-            Self::File(file) => file.flush(),
-        }
-    }
-}
-impl std::os::fd::AsFd for TtyOut {
-    fn as_fd(&self) -> std::os::fd::BorrowedFd {
-        match self {
-            Self::Stdout(stdout) => stdout.as_fd(),
-            Self::File(file) => file.as_fd(),
         }
     }
 }

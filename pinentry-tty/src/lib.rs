@@ -72,6 +72,17 @@ impl<T> PushPop<T> for Vec<T> {
     }
 }
 
+impl PushPop<char> for String {
+    fn push(&mut self, x: char) -> Result<(), char> {
+        self.push(x);
+        Ok(())
+    }
+
+    fn pop(&mut self) -> Option<char> {
+        self.pop()
+    }
+}
+
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum AskPinError {
@@ -93,8 +104,7 @@ impl fmt::Display for AskPinError {
 }
 
 pub fn dialog<'a, T>(
-    tty_in: &mut impl io::Read,
-    tty_out: &mut (impl io::Write + std::os::fd::AsFd),
+    tty: &mut impl Terminal,
     message: impl fmt::Display,
     options: &'a [(&str, T)],
 ) -> Result<Option<&'a T>, DialogError> {
@@ -107,10 +117,10 @@ pub fn dialog<'a, T>(
         },
     );
 
-    writeln!(tty_out, "{message}").map_err(DialogError::Write)?;
+    writeln!(tty, "{message}").map_err(DialogError::Write)?;
 
-    let result = render_options(tty_in, tty_out, &options);
-    writeln!(tty_out).map_err(DialogError::Write)?;
+    let result = render_options(tty, &options);
+    writeln!(tty).map_err(DialogError::Write)?;
     result
 }
 
@@ -153,42 +163,43 @@ impl<'a, T> DialogOption<'a, T> {
 }
 
 fn render_options<'a, T>(
-    tty_in: &mut impl io::Read,
-    tty_out: &mut (impl io::Write + std::os::fd::AsFd),
+    tty: &mut impl Terminal,
     options: &[DialogOption<'a, T>],
 ) -> Result<Option<&'a T>, DialogError> {
+    use std::io::Write;
+    use terminal::Key;
     use termion::style::{NoUnderline, Underline};
+
     if options.len() > 9 {
         return Err(DialogError::TooManyOptions);
     }
 
     for (i, option) in (1..).zip(options) {
-        write!(tty_out, "  {Underline}{i}{NoUnderline} ").map_err(DialogError::Write)?;
-        option.render(tty_out)?;
-        writeln!(tty_out).map_err(DialogError::Write)?;
+        write!(tty, "  {Underline}{i}{NoUnderline} ").map_err(DialogError::Write)?;
+        option.render(tty)?;
+        writeln!(tty).map_err(DialogError::Write)?;
     }
 
-    write!(tty_out, "Type [").map_err(DialogError::Write)?;
+    write!(tty, "Type [").map_err(DialogError::Write)?;
     for i in 1..=options.len() {
-        write!(tty_out, "{i}").map_err(DialogError::Write)?;
+        write!(tty, "{i}").map_err(DialogError::Write)?;
     }
     for short in options
         .iter()
         .flat_map(|o| o.short)
         .map(|s| s.to_lowercase())
     {
-        write!(tty_out, "{short}").map_err(DialogError::Write)?;
+        write!(tty, "{short}").map_err(DialogError::Write)?;
     }
-    write!(tty_out, "] : ").map_err(DialogError::Write)?;
-    tty_out.flush().map_err(DialogError::Write)?;
+    write!(tty, "] : ").map_err(DialogError::Write)?;
+    tty.flush().map_err(DialogError::Write)?;
 
-    use termion::{input::TermRead, raw::IntoRawMode};
-    let mut tty_out = tty_out.into_raw_mode().map_err(DialogError::RawMode)?;
+    let (keys, mut tty_out) = tty.keys().map_err(DialogError::RawMode)?;
 
-    for key in tty_in.keys() {
+    for key in keys {
         tty_out.flush().map_err(DialogError::Write)?;
         match key.map_err(DialogError::Read)? {
-            termion::event::Key::Char(x) => {
+            Key::Char(x) => {
                 if let Some(index) = x.to_digit(10) {
                     let Ok(index): Result<usize, _> = index.try_into() else {
                         continue;
@@ -213,7 +224,7 @@ fn render_options<'a, T>(
                     return Ok(Some(option.value));
                 }
             }
-            termion::event::Key::Ctrl('c' | 'C' | 'd' | 'D') => {
+            Key::Ctrl('c' | 'C' | 'd' | 'D') | Key::Null | Key::Esc => {
                 write!(tty_out, "Aborted.").map_err(DialogError::Write)?;
                 return Ok(None);
             }
