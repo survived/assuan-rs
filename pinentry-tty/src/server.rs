@@ -1,8 +1,16 @@
+//! Pinentry TTY server
+//!
+//! Note: it's easier to use [`pinentry_tty::server()`](crate::server()) function.
+
 use std::fmt;
 
 use assuan_server::response::SecretData;
 use either::Either;
 
+/// [PinentryCmds](pinentry::PinentryCmds) implementation based on [`ask_pin`](crate::ask_pin)
+/// and [`dialog`](crate::dialog) functions provided by this library
+///
+/// Can be converted into assuan server using [`pinentry::PinentryServer`]
 #[derive(Default)]
 pub struct PinentryTty {
     tty: Option<std::path::PathBuf>,
@@ -94,6 +102,7 @@ impl PinentryTty {
     }
 }
 
+/// Error returned by [PinentryTty]
 #[derive(Debug)]
 pub struct Error(Reason);
 

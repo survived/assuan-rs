@@ -11,6 +11,13 @@ pub mod terminal;
 ///
 /// Alias for wrapping [server::PinentryTty] into [pinentry::PinentryServer] and
 /// converting into [assuan_server::AssuanServer].
+///
+/// ### Example
+/// Launch a pinentry-tty server that accepts commands from stdin and writes responses
+/// to stdout:
+/// ```rust
+#[doc = include_str!("main.rs")]
+/// ```
 pub fn server() -> assuan_server::AssuanServer<
     pinentry::PinentryServer<server::PinentryTty>,
     impl assuan_server::router::CmdList<pinentry::PinentryServer<server::PinentryTty>>,
