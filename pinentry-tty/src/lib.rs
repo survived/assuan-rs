@@ -153,6 +153,7 @@ pub trait PushPop<T> {
     fn pop(&mut self) -> Option<T>;
 }
 
+#[cfg(feature = "server")]
 impl PushPop<char> for assuan_server::response::SecretData {
     fn push(&mut self, x: char) -> Result<(), char> {
         (**self).push(x).map_err(|_| x)
@@ -321,7 +322,7 @@ impl<'a, T> DialogOption<'a, T> {
 
     pub fn render(&self, tty_out: &mut impl std::io::Write) -> Result<(), DialogError> {
         if let Some(short) = self.short {
-            use termion::style::{NoUnderline, Underline};
+            use crate::ctrl_seq::{NoUnderline, Underline};
             let (left, right) = self
                 .text
                 .split_once(short)
@@ -339,9 +340,9 @@ fn render_options<'a, T>(
     tty: &mut impl Terminal,
     options: &[DialogOption<'a, T>],
 ) -> Result<Option<&'a T>, DialogError> {
+    use crate::ctrl_seq::{NoUnderline, Underline};
     use std::io::Write;
     use terminal::Key;
-    use termion::style::{NoUnderline, Underline};
 
     if options.len() > 9 {
         return Err(DialogError::TooManyOptions);
@@ -471,4 +472,43 @@ impl std::error::Error for DialogError {
             DialogError::TooManyOptions | DialogError::TooFewOptions | DialogError::Bug(_) => None,
         }
     }
+}
+
+mod ctrl_seq {
+    use std::fmt;
+
+    /// Create a CSI-introduced sequence.
+    macro_rules! csi {
+        ($( $l:expr ),*) => { concat!("\x1B[", $( $l ),*) };
+    }
+
+    /// Derive a CSI sequence struct.
+    macro_rules! derive_csi_sequence {
+        ($doc:expr, $name:ident, $value:expr) => {
+            #[doc = $doc]
+            #[derive(Copy, Clone)]
+            pub struct $name;
+
+            impl fmt::Display for $name {
+                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    write!(f, csi!($value))
+                }
+            }
+
+            impl AsRef<[u8]> for $name {
+                fn as_ref(&self) -> &'static [u8] {
+                    csi!($value).as_bytes()
+                }
+            }
+
+            impl AsRef<str> for $name {
+                fn as_ref(&self) -> &'static str {
+                    csi!($value)
+                }
+            }
+        };
+    }
+
+    derive_csi_sequence!("Underlined text.", Underline, "4m");
+    derive_csi_sequence!("Undo underlined text.", NoUnderline, "24m");
 }

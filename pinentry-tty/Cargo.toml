@@ -15,8 +15,13 @@ zeroize = "1"
 
 [features]
 default = ["termion"]
-server = ["assuan-server", "pinentry"]
+server = ["assuan-server", "pinentry", "termion"]
 termion = ["dep:termion"]
+
+[[bin]]
+name = "pinentry-tty"
+path = "src/main.rs"
+required-features = ["server", "termion"]
 
 [package.metadata.docs.rs]
 all-features = true
