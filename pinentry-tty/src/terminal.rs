@@ -16,11 +16,11 @@ pub trait Terminal: io::Read + io::Write {
     /// Returns iterator over keys pressed by the terminal user and a writer that can be
     /// used to write something to the terminal
     ///
-    /// It's required that even special keys like backspace and esc are captured. Usually,
-    /// it means that terminal needs to be switched into a [raw mode](termion::raw).
-    /// Writer should hold a guard for raw mode: when writer is dropped, the original state
-    /// of the terminal must be restored. For that reason, writer must outlive the iterator
-    /// over keys.
+    /// Characters must not appear in the user terminal. It's also required that even special
+    /// keys like backspace and esc are captured. Usually, it means that terminal needs to be
+    /// switched into a [raw mode](termion::raw). Writer should hold a guard for raw mode:
+    /// when writer is dropped, the original state of the terminal must be restored. For that
+    /// reason, writer must outlive the iterator over keys.
     fn keys(
         &mut self,
     ) -> io::Result<(
@@ -69,11 +69,13 @@ pub enum Key {
 }
 
 /// Default terminal implementation based on [termion] crate
+#[cfg(feature = "termion")]
 pub struct Termion<I, O> {
     input: I,
     output: O,
 }
 
+#[cfg(feature = "termion")]
 impl<I, O> Termion<I, O>
 where
     I: io::Read + std::os::fd::AsFd,
@@ -92,6 +94,7 @@ where
     }
 }
 
+#[cfg(feature = "termion")]
 impl Termion<std::io::Stdin, std::io::Stdout> {
     /// Constructs a terminal from stdin and stdout
     ///
@@ -102,6 +105,7 @@ impl Termion<std::io::Stdin, std::io::Stdout> {
     }
 }
 
+#[cfg(feature = "termion")]
 impl<I, O> io::Read for Termion<I, O>
 where
     I: io::Read,
@@ -111,6 +115,7 @@ where
     }
 }
 
+#[cfg(feature = "termion")]
 impl<I, O> io::Write for Termion<I, O>
 where
     O: io::Write,
@@ -123,6 +128,7 @@ where
     }
 }
 
+#[cfg(feature = "termion")]
 impl<I, O> Terminal for Termion<I, O>
 where
     I: io::Read,
@@ -161,3 +167,5 @@ impl fmt::Display for NotTty {
         f.write_str("not a tty")
     }
 }
+
+impl std::error::Error for NotTty {}

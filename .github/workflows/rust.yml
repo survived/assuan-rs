@@ -18,6 +18,23 @@ jobs:
         cache-on-failure: "true"
     - name: Build
       run: cargo build --all
+  build-pinentry-tty:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+        - features: ""
+        - features: "server"
+        - features: "termion"
+        - features: "server,termion"
+    steps:
+    - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
+      with:
+        cache-on-failure: "true"
+    - name: Build
+      run: cargo build --no-default-features --features "${{ matrix.features }}"
   test:
     runs-on: ubuntu-latest
     steps:

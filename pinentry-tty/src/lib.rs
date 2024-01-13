@@ -1,9 +1,29 @@
+//! This crate provides basic interactions with terminal users such as asking a PIN and showing a dialog
+//!
+//! Library is focused on security to treat sensitive data such as PIN appropriately.
+//!
+//! Two fundamental TUI interactions provided are:
+//! 1. [`ask_pin`] to ask user to provide a PIN
+//! 2. [`dialog`] to ask user to choose one of available options
+//!
+//! Initially, these functions were developed to replace [`pinentry-tty` utility][pinentry],
+//! but generally they can be used in any application. When `server` feature is enabled,
+//! [`server`](server()) function is available that can be used to launch pinentry-tty server.
+//!
+//! [pinentry]: https://git.gnupg.org/cgi-bin/gitweb.cgi?p=pinentry.git
 #![forbid(unused_crate_dependencies)]
+#![deny(missing_docs)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 use std::{fmt, io};
 
-pub use terminal::{Terminal, Termion};
+pub use terminal::Terminal;
+#[cfg(feature = "termion")]
+pub use terminal::Termion;
 
+pub use zeroize;
+
+#[cfg(feature = "server")]
 pub mod server;
 pub mod terminal;
 
@@ -18,6 +38,7 @@ pub mod terminal;
 /// ```rust
 #[doc = include_str!("main.rs")]
 /// ```
+#[cfg(feature = "server")]
 pub fn server() -> assuan_server::AssuanServer<
     pinentry::PinentryServer<server::PinentryTty>,
     impl assuan_server::router::CmdList<pinentry::PinentryServer<server::PinentryTty>>,
@@ -25,6 +46,37 @@ pub fn server() -> assuan_server::AssuanServer<
     pinentry::PinentryServer::new(server::PinentryTty::default()).build_assuan_server()
 }
 
+/// Asks user to provide a PIN
+///
+/// Prints the `prompt` and reads a PIN from the user. Characters that user types will not
+/// be visible in the terminal. Writes PIN into `out`. `out` is expected to be empty.
+///
+/// When user types a newline (a.k.a. Enter), indicating end of input, `Ok(true)` is returned.
+/// If `Ctrl-C`, `Ctrl-D` or `Escape` are pressed, `Ok(false)` is returned. `Err(err)` is
+/// returned if any error occurs.
+///
+/// ## Example
+/// ```rust,no_run
+/// use pinentry_tty::zeroize::Zeroizing;
+///
+/// let mut terminal = pinentry_tty::Termion::new_stdio()?;
+///
+/// // Note: if user types a PIN overflowing string capacity, an error is returned
+/// let mut pin = Zeroizing::new(String::with_capacity(100));
+/// pinentry_tty::ask_pin(
+///     &mut terminal,
+///     "PIN: ",
+///     &mut pin,
+/// )?;
+/// # Ok::<_, Box<dyn std::error::Error>>(())
+/// ```
+///
+/// User will see a prompt:
+/// ```text
+/// PIN:
+/// ```
+/// and then user will be able to type a PIN. Characters of the PIN will not be visible.
+/// PIN can be submitted by typing Enter, or aborted by typing `Ctrl-C`, `Ctrl-D` or `Escape`.
 pub fn ask_pin(
     tty: &mut impl Terminal,
     prompt: impl fmt::Display,
@@ -143,12 +195,17 @@ impl PushPop<char> for zeroize::Zeroizing<String> {
     }
 }
 
+/// Explains why [`ask_pin`] failed
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum AskPinError {
+    /// Error occurred while reading input from the user
     Read(io::Error),
+    /// Error occurred while writing to TTY
     Write(io::Error),
+    /// Could not switch TTY into raw mode
     RawMode(io::Error),
+    /// User entered too long PIN
     PinTooLong,
 }
 
@@ -163,11 +220,67 @@ impl fmt::Display for AskPinError {
     }
 }
 
+impl std::error::Error for AskPinError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            AskPinError::Read(err) => Some(err),
+            AskPinError::Write(err) => Some(err),
+            AskPinError::RawMode(err) => Some(err),
+            AskPinError::PinTooLong => None,
+        }
+    }
+}
+
+/// Asks user to choose among one or several options
+///
+/// Prints a message and available options to user, then waits until user chooses
+/// one of them or aborts the dialog.
+///
+/// This can be used to implement various interactions with the user. A dialog with
+/// one option can be used to display an informational alert to confirm that user saw
+/// the message. A dialog with two options could be asking for confirmation for some
+/// action, and so on.
+///
+/// User can choose an option by typing a single character. This character can be either
+/// numerical or alphabetical:
+/// * Each option is numbered so user can choose any option by
+///   typing it sequential number from `1` to `9`.
+/// * Option can be chosen by typing its first alphabetical character. For instance:
+///   * If two options are given: `Continue` and `Abort`, then user can type `C` (uppercase
+///     or lowercase) to <u>c</u>ontinue, and type `A` to <u>a</u>bort.
+///   * If given options `Continue` and `Cancel`, user can type `C` to <u>c</u>ontinue or
+///     `A` to c<u>a</u>ncel.
+///
+/// ## Number of options
+/// At least one option must be provided. There cannot be more than 9 options.
+/// Otherwise an error is returned.
+///
+/// ## Example
+/// ```rust,no_run
+#[doc = include_str!("../examples/do_you_want_to_proceed.rs")]
+/// ```
+///
+/// User will see:
+///
+/// > Do you want to proceed? \
+/// > &nbsp;  <u>1</u> <u>Y</u>es \
+/// > &nbsp;  <u>2</u> <u>N</u>o \
+/// > &nbsp;Type \[12yn\] :
+///
+/// * Typing 1 or `Y` (uppercase or lowercase) returns `Ok(Some(&Choice::Yes))`
+/// * Typing 2 or `N` returns `Ok(Some(&Choice::No))`
+/// * Typing `Ctrl-C`, `Ctrl-D` or `Escape` aborts the dialog and returns `Ok(None)`
+/// * `Err(err)` is returned if any error occurs
+///
+/// You can try it out via `cargo run --example do_you_want_to_proceed`.
 pub fn dialog<'a, T>(
     tty: &mut impl Terminal,
     message: impl fmt::Display,
     options: &'a [(&str, T)],
 ) -> Result<Option<&'a T>, DialogError> {
+    if options.is_empty() {
+        return Err(DialogError::TooFewOptions);
+    }
     let options = options.iter().fold(
         Vec::with_capacity(options.len()),
         |mut acc, (text, value)| {
@@ -296,16 +409,27 @@ fn render_options<'a, T>(
     Ok(None)
 }
 
+/// Explains why [`dialog`] failed
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum DialogError {
+    /// Error occurred while reading input from the user
     Read(io::Error),
+    /// Error occurred while writing to TTY
     Write(io::Error),
+    /// Could not switch TTY into raw mode
     RawMode(io::Error),
+    /// No options were provided as input: at least one option is required
     TooManyOptions,
+    /// Too many options were provided as input: [`dialog`] can take no more than 9 options
+    TooFewOptions,
+    /// Bug occurred
     Bug(Bug),
 }
 
+/// Error indicating that a bug occurred
+///
+/// If you encounter this error, please file an issue!
 #[derive(Debug)]
 pub struct Bug(BugReason);
 
@@ -327,9 +451,24 @@ impl fmt::Display for DialogError {
             DialogError::Write(err) => write!(f, "write to tty: {err}"),
             DialogError::RawMode(err) => write!(f, "switch to raw mode: {err}"),
             DialogError::TooManyOptions => write!(f, "invalid arguments: too many options"),
+            DialogError::TooFewOptions => write!(
+                f,
+                "invalid arguments: at least one option must be specified"
+            ),
             DialogError::Bug(Bug(BugReason::ShortCharacterNotFound)) => {
                 write!(f, "bug occurred: short character not found")
             }
+        }
+    }
+}
+
+impl std::error::Error for DialogError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            DialogError::Read(err) => Some(err),
+            DialogError::Write(err) => Some(err),
+            DialogError::RawMode(err) => Some(err),
+            DialogError::TooManyOptions | DialogError::TooFewOptions | DialogError::Bug(_) => None,
         }
     }
 }
