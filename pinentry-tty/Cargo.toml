@@ -11,3 +11,4 @@ pinentry = { path = "../pinentry" }
 
 termion = "3"
 either = "1"
+zeroize = "1"

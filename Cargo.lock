@@ -95,6 +95,7 @@ dependencies = [
  "either",
  "pinentry",
  "termion",
+ "zeroize",
 ]
 
 [[package]]

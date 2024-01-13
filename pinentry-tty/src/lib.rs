@@ -67,8 +67,37 @@ fn read_pin(tty: &mut impl Terminal, out: &mut impl PushPop<char>) -> Result<boo
     Err(AskPinError::Read(io::ErrorKind::UnexpectedEof.into()))
 }
 
+/// Container that provides push/pop access
+///
+/// The trait is used to store PIN typed by the user in [`ask_pin`], therefore the trait implementation
+/// must treat its content as highly sensitive.
+///
+/// Out of box, we provide an implementation of the trait for the `Zeroizing<String>`:
+/// 1. [`Zeroizing`](zeroize::Zeroizing) ensures that the PIN is erased from the memory when dropped
+/// 2. Implementation does not allow the string to grow: `push` operation is only possible
+///    if the string has some capacity left \
+///    Growing the string leaves a partial copy of it on heap which is not desired for sensitive information.
+///
+/// ## Example
+/// ```rust
+/// use pinentry_tty::PushPop;
+/// use zeroize::Zeroizing;
+///
+/// let mut buffer = Zeroizing::new(String::with_capacity(10));
+/// for x in "0123456789".chars() {
+///     buffer.push(x)?;
+/// }
+///
+/// // Pushing any more character would require string to grow, so error is returned
+/// buffer.push('a').unwrap_err();
+/// # Ok::<_, char>(())
+/// ```
 pub trait PushPop<T> {
+    /// Appends `x`
+    ///
+    /// Returns `Err(x)` if container cannot take it
     fn push(&mut self, x: T) -> Result<(), T>;
+    /// Pops the last element
     fn pop(&mut self) -> Option<T>;
 }
 
@@ -82,25 +111,35 @@ impl PushPop<char> for assuan_server::response::SecretData {
     }
 }
 
-impl<T> PushPop<T> for Vec<T> {
-    fn push(&mut self, x: T) -> Result<(), T> {
-        self.push(x);
-        Ok(())
-    }
-
-    fn pop(&mut self) -> Option<T> {
-        self.pop()
-    }
-}
-
-impl PushPop<char> for String {
+/// Push/pop access to the string without reallocation
+///
+/// `push` operation will never cause the internal buffer of `String` to grow
+impl PushPop<char> for zeroize::Zeroizing<String> {
+    /// Appends a character to the string if it has free capacity
+    ///
+    /// ```rust
+    /// use pinentry_tty::PushPop;
+    /// use zeroize::Zeroizing;
+    ///
+    /// let mut buf = Zeroizing::new(String::with_capacity(2));
+    /// buf.push('a').unwrap();
+    /// buf.push('b').unwrap();
+    ///
+    /// // String has no internal capacity left. Pushing new element
+    /// // will not succeed
+    /// buf.push('c').unwrap_err();
+    /// ```
     fn push(&mut self, x: char) -> Result<(), char> {
-        self.push(x);
-        Ok(())
+        if self.len() + x.len_utf8() <= self.capacity() {
+            (**self).push(x);
+            Ok(())
+        } else {
+            Err(x)
+        }
     }
 
     fn pop(&mut self) -> Option<char> {
-        self.pop()
+        (**self).pop()
     }
 }
 
