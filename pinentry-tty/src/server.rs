@@ -7,6 +7,8 @@ use std::fmt;
 use assuan_server::response::SecretData;
 use either::Either;
 
+use crate::terminal::Tui;
+
 /// [PinentryCmds](pinentry::PinentryCmds) implementation based on [`ask_pin`](crate::ask_pin)
 /// and [`dialog`](crate::dialog) functions provided by this library
 ///
@@ -34,8 +36,7 @@ impl pinentry::PinentryCmds for PinentryTty {
         let mut tty = self.open_tty()?;
 
         let mut pin = SecretData::default();
-        let pin_submitted = crate::ask_pin(
-            &mut tty,
+        let pin_submitted = tty.ask_pin(
             &messages::PinPrompt {
                 error,
                 title: window_title,
@@ -67,8 +68,7 @@ impl pinentry::PinentryCmds for PinentryTty {
             options.push((cancel, pinentry::ConfirmAction::Canceled));
         }
 
-        let choice = crate::dialog(
-            &mut tty,
+        let choice = tty.dialog(
             &messages::Confirm {
                 error,
                 title: window_title,
@@ -112,7 +112,7 @@ enum Reason {
     WriteTty(std::io::Error),
     ReadTty(std::io::Error),
     RawMode(std::io::Error),
-    Dialog(crate::DialogError),
+    Dialog(crate::terminal::DialogError),
     OutputNotTty,
     PinTooLong,
     Internal(InternalError),
@@ -179,23 +179,23 @@ impl From<assuan_server::response::TooLong> for Error {
     }
 }
 
-impl From<crate::AskPinError> for Error {
-    fn from(err: crate::AskPinError) -> Self {
+impl From<crate::terminal::AskPinError> for Error {
+    fn from(err: crate::terminal::AskPinError) -> Self {
         match err {
-            crate::AskPinError::Read(err) => Error(Reason::ReadTty(err)),
-            crate::AskPinError::Write(err) => Error(Reason::WriteTty(err)),
-            crate::AskPinError::RawMode(err) => Error(Reason::RawMode(err)),
-            crate::AskPinError::PinTooLong => Error(Reason::PinTooLong),
+            crate::terminal::AskPinError::Read(err) => Error(Reason::ReadTty(err)),
+            crate::terminal::AskPinError::Write(err) => Error(Reason::WriteTty(err)),
+            crate::terminal::AskPinError::RawMode(err) => Error(Reason::RawMode(err)),
+            crate::terminal::AskPinError::PinTooLong => Error(Reason::PinTooLong),
         }
     }
 }
 
-impl From<crate::DialogError> for Error {
-    fn from(err: crate::DialogError) -> Self {
+impl From<crate::terminal::DialogError> for Error {
+    fn from(err: crate::terminal::DialogError) -> Self {
         match err {
-            crate::DialogError::Read(err) => Error(Reason::ReadTty(err)),
-            crate::DialogError::Write(err) => Error(Reason::WriteTty(err)),
-            crate::DialogError::RawMode(err) => Error(Reason::RawMode(err)),
+            crate::terminal::DialogError::Read(err) => Error(Reason::ReadTty(err)),
+            crate::terminal::DialogError::Write(err) => Error(Reason::WriteTty(err)),
+            crate::terminal::DialogError::RawMode(err) => Error(Reason::RawMode(err)),
             _ => Error(Reason::Dialog(err)),
         }
     }

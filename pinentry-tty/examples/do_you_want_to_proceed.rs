@@ -4,11 +4,8 @@ enum Choice {
     No,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut tty = pinentry_tty::Termion::new_stdio()?;
-
+fn main() -> std::io::Result<()> {
     let choice = pinentry_tty::dialog(
-        &mut tty,
         "Do you want to proceed?",
         &[("Yes", Choice::Yes), ("No", Choice::No)],
     )?;
