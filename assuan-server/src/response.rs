@@ -176,6 +176,13 @@ impl Data {
         self.data_resp.append(data)
     }
 
+    /// Appends single character to the response
+    ///
+    /// Returns error if response exceeds the limit set by assuan protocol (see [Data::MAX_BYTES])
+    pub fn push(&mut self, x: char) -> Result<(), TooLong> {
+        self.data_resp.push(x)
+    }
+
     /// Removes the last character from the response
     ///
     /// May not have great performance as each invocation requires UTF8 decoding of all
@@ -286,6 +293,13 @@ impl Ok {
     /// Returns error if response exceeds the limit set by assuan protocol (see [Ok::MAX_BYTES])
     pub fn append(&mut self, data: &str) -> Result<(), TooLong> {
         self.resp.append(data)
+    }
+
+    /// Appends single character to the response
+    ///
+    /// Returns error if response exceeds the limit set by assuan protocol (see [Ok::MAX_BYTES])
+    pub fn push(&mut self, x: char) -> Result<(), TooLong> {
+        self.resp.push(x)
     }
 
     /// Indicated whether connection needs to be closed when response is sent
@@ -405,6 +419,16 @@ mod builder {
                 // Continue parsing the string
                 data = iter.as_str();
             }
+        }
+
+        /// Appends single character to the response
+        ///
+        /// Retunrs error if data exceeds the size limit
+        pub fn push(&mut self, x: char) -> Result<(), TooLong> {
+            // Any char can be encoded via 4 bytes
+            let mut s = [0u8; 4];
+            let s = x.encode_utf8(&mut s);
+            self.append(s)
         }
 
         fn add_data(&mut self, data: impl AsRef<[u8]>) -> Result<(), TooLong> {

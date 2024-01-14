@@ -6,9 +6,23 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-assuan-server = { path = "../assuan-server" }
-pinentry = { path = "../pinentry" }
+assuan-server = { path = "../assuan-server", optional = true }
+pinentry = { path = "../pinentry", optional = true }
 
-termion = "3"
+termion = { version = "3", optional = true }
 either = "1"
-heapless = "0.8"
+zeroize = "1"
+
+[features]
+default = ["termion"]
+server = ["assuan-server", "pinentry", "termion"]
+termion = ["dep:termion"]
+
+[[bin]]
+name = "pinentry-tty"
+path = "src/main.rs"
+required-features = ["server", "termion"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

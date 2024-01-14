@@ -10,6 +10,7 @@ btns
 zeroize
 zeroizing
 zeroized
+docsrs
 
 SETTIMEOUT
 SETDESC
