@@ -1,12 +1,21 @@
+//! Routes requests between registered commands
+
 use std::fmt;
 
 pub use either::Either;
 
 use crate::{ErrorCode, HasErrorCode, Response};
 
+/// List of registered commands
 pub trait CmdList<S> {
+    /// Error type returned by [handle](Self::handle)
     type Error: fmt::Display + HasErrorCode;
 
+    /// Routes the command execution
+    ///
+    /// Calling this function attempts to find a command `cmd` in the list. If it's present,
+    /// the command handler function is called with `state` and `params` being the arguments,
+    /// `Some(response)` is returned. If command is not found in the list, `None` is returned.
     fn handle(
         &mut self,
         cmd: &str,
@@ -15,6 +24,10 @@ pub trait CmdList<S> {
     ) -> Option<Result<Response, Self::Error>>;
 }
 
+/// Prepends a new command to the [list of commands](CmdList)
+///
+/// Not part of public API as it's a bit complex. [`AssuanServer::add_command`](crate::AssuanServer::add_command)
+/// returns `impl CmdList<S>` in order to hide this type.
 pub(crate) struct Cons<F, L> {
     cmd_name: &'static str,
     handler: F,
@@ -22,6 +35,8 @@ pub(crate) struct Cons<F, L> {
 }
 
 impl<F, L> Cons<F, L> {
+    /// Constructs a new [list of commands](CmdList) that has command with `name` and `handler`
+    /// as the first element in the list, followed by a list `tail`
     pub fn new(name: &'static str, handler: F, tail: L) -> Self {
         Self {
             cmd_name: name,
@@ -55,11 +70,13 @@ where
     }
 }
 
+/// Empty [list of commands](CmdList)
 pub struct Nil;
 
 impl<S> CmdList<S> for Nil {
     type Error = std::convert::Infallible;
 
+    /// Always returns `None`
     fn handle(
         &mut self,
         _cmd: &str,
@@ -70,29 +87,36 @@ impl<S> CmdList<S> for Nil {
     }
 }
 
-pub struct SystemCmds<L = Nil> {
+/// List of predefined commands
+///
+/// Contains commands:
+/// * `BYE` that always responds with `OK` and terminates the connection
+/// * `NOP` that always responds with `OK` and doesn't do anything else
+pub struct PredefinedCmds<L = Nil> {
     tail: L,
 }
 
-impl Default for SystemCmds {
+impl Default for PredefinedCmds {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SystemCmds {
+impl PredefinedCmds {
+    /// Constructs a list of predefined commands
     pub fn new() -> Self {
         Self::with_tail(Nil)
     }
 }
 
-impl<L> SystemCmds<L> {
+impl<L> PredefinedCmds<L> {
+    /// Constructs a list of predefined commands followed by `tail`
     pub fn with_tail(tail: L) -> Self {
         Self { tail }
     }
 }
 
-impl<S, L: CmdList<S>> CmdList<S> for SystemCmds<L> {
+impl<S, L: CmdList<S>> CmdList<S> for PredefinedCmds<L> {
     type Error = L::Error;
 
     fn handle(
