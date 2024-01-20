@@ -10,4 +10,4 @@ dictionaries:
   - project-words
 ignorePaths:
   - '/target'
-  - '/assuan-server/src/error_code.rs'
+  - '/assuan/src/error_code.rs'

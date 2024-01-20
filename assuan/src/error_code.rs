@@ -1,6 +1,8 @@
 use core::fmt;
 
+/// Error that has an error code assigned to it
 pub trait HasErrorCode {
+    /// Error code
     fn code(&self) -> ErrorCode;
 }
 
@@ -10,8 +12,11 @@ impl HasErrorCode for core::convert::Infallible {
     }
 }
 
+/// Wraps an error and assigns an error code to it
 pub struct WithErrorCode<E> {
+    /// Error code assigned to the error
     pub code: ErrorCode,
+    /// The error
     pub error: E,
 }
 
@@ -29,6 +34,9 @@ impl<E: fmt::Display> fmt::Display for WithErrorCode<E> {
 
 macro_rules! define_error_code {
     ($($code:literal $name:ident $comment_line:expr),+$(,)*) => {
+        /// Error code defined by GPG library
+        ///
+        /// List of error codes was taken from here: <https://github.com/gpg/libgpg-error/blob/4a9def77488f2631f71737357d9e9dd874c9b302/src/err-codes.h.in>
         #[derive(Debug, Clone, Copy)]
         pub struct ErrorCode(pub u32);
 

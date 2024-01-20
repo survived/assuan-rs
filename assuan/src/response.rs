@@ -40,7 +40,7 @@ impl Response {
     ///
     /// Alias to:
     /// ```rust
-    /// use assuan_server::response::{Response, Ok};
+    /// use assuan::response::{Response, Ok};
     ///
     /// let r: Response = Ok::new().into();
     /// ```
@@ -52,10 +52,10 @@ impl Response {
     ///
     /// Alias to:
     /// ```rust
-    /// use assuan_server::response::{Response, Ok};
+    /// use assuan::response::{Response, Ok};
     ///
     /// let r: Response = Ok::with_debug_info("custom debug info")?.into();
-    /// # Ok::<_, assuan_server::response::TooLong>(())
+    /// # Ok::<_, assuan::response::TooLong>(())
     /// ```
     pub fn ok_with_debug_info(info: &str) -> Result<Self, TooLong> {
         Ok::with_debug_info(info).map(Self::Ok)
@@ -65,10 +65,10 @@ impl Response {
     ///
     /// Alias to:
     /// ```rust
-    /// use assuan_server::response::{Response, Data};
+    /// use assuan::response::{Response, Data};
     ///
     /// let r: Response = Data::new("data to be sent")?.into();
-    /// # Ok::<_, assuan_server::response::TooLong>(())
+    /// # Ok::<_, assuan::response::TooLong>(())
     /// ```
     pub fn data(data: &str) -> Result<Self, TooLong> {
         Data::new(data).map(Self::Data)
@@ -107,11 +107,11 @@ impl Response {
 ///
 /// ### Example
 /// ```rust
-/// use assuan_server::response::SecretData;
+/// use assuan::response::SecretData;
 ///
 /// let mut response = SecretData::default();
 /// response.append("my password")?;
-/// # Ok::<_, assuan_server::response::TooLong>(())
+/// # Ok::<_, assuan::response::TooLong>(())
 /// ```
 pub type SecretData = Box<zeroize::Zeroizing<Data>>;
 
@@ -190,7 +190,7 @@ impl Data {
     ///
     /// ### Example
     /// ```rust
-    /// use assuan_server::response::Data;
+    /// use assuan::response::Data;
     ///
     /// let mut resp = Data::new("test")?;
     /// assert_eq!(resp.pop(), Some('t'));
@@ -198,7 +198,7 @@ impl Data {
     /// assert_eq!(resp.pop(), Some('e'));
     /// assert_eq!(resp.pop(), Some('t'));
     /// assert_eq!(resp.pop(), None);
-    /// # Ok::<_, assuan_server::response::TooLong>(())
+    /// # Ok::<_, assuan::response::TooLong>(())
     /// ```
     pub fn pop(&mut self) -> Option<char> {
         if self.data_resp.size() == Self::PREFIX.len() {
@@ -218,13 +218,13 @@ impl Data {
     ///
     /// ### Example
     /// ```rust
-    /// use assuan_server::response::Data;
+    /// use assuan::response::Data;
     ///
     /// let data = Data::new("one two")?;
     /// assert_eq!(data.size(), 7);
     /// let data = Data::new("one\ntwo")?;
     /// assert_eq!(data.size(), 9);
-    /// # Ok::<_, assuan_server::response::TooLong>(())
+    /// # Ok::<_, assuan::response::TooLong>(())
     /// ```
     pub fn size(&self) -> usize {
         self.data_resp.size() - Self::PREFIX.len()
@@ -312,13 +312,13 @@ impl Ok {
     ///
     /// ### Example
     /// ```rust
-    /// use assuan_server::response::Ok;
+    /// use assuan::response::Ok;
     ///
     /// let resp = Ok::with_debug_info("one two")?;
     /// assert_eq!(resp.size(), 7);
     /// let resp = Ok::with_debug_info("one\ntwo")?;
     /// assert_eq!(resp.size(), 9);
-    /// # Ok::<_, assuan_server::response::TooLong>(())
+    /// # Ok::<_, assuan::response::TooLong>(())
     /// ```
     pub fn size(&self) -> usize {
         self.resp.size() - Self::PREFIX.len()

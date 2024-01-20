@@ -49,6 +49,7 @@
 //! [Assuan protocol]: https://www.gnupg.org/documentation/manuals/assuan/index.html
 
 #![forbid(unused_crate_dependencies)]
+#![deny(missing_docs)]
 
 use core::fmt;
 use std::io;
@@ -71,28 +72,36 @@ pub mod router;
 /// Maximum size of a line following the assuan specs
 pub const MAX_LINE_SIZE: usize = 1000;
 
+/// Assuan Server
+///
+/// Wraps the server state provided [at construction](Self::new). When serves a client in
+/// [`AssuanServer::serve_client`], it routes incoming requests between commands registered
+/// via [`AssuanServer::add_command`]. Out-of-box, it recognizes some
+/// [predefined commands](router::PredefinedCmds) like `BYE` (can be disabled by using
+/// [`AssuanServer::without_predefined_cmds`]).
 pub struct AssuanServer<S, L> {
     service: S,
     cmd_handlers: L,
 }
 
-impl<S> AssuanServer<S, router::SystemCmds> {
+impl<S> AssuanServer<S, router::PredefinedCmds> {
     /// Constructs a new assuan server
     ///
-    /// Server has some [predefined commands](router::SystemCmds). You may construct a server
-    /// without them by using [`AssuanServer::without_system_cmds`].
+    /// Server has some [predefined commands](router::PredefinedCmds). You may construct a server
+    /// without them by using [`AssuanServer::without_predefined_cmds`].
     ///
     /// Commands can be registered via [.add_command](AssuanServer::add_command) method.
     pub fn new(service: S) -> Self {
         Self {
             service,
-            cmd_handlers: router::SystemCmds::new(),
+            cmd_handlers: router::PredefinedCmds::new(),
         }
     }
 }
 
 impl<S> AssuanServer<S, router::Nil> {
-    pub fn without_system_cmds(service: S) -> Self {
+    /// Constructs a new assuan server without any [predefined commands](router::PredefinedCmds)
+    pub fn without_predefined_cmds(service: S) -> Self {
         Self {
             service,
             cmd_handlers: router::Nil,
@@ -101,6 +110,10 @@ impl<S> AssuanServer<S, router::Nil> {
 }
 
 impl<S, L: router::CmdList<S>> AssuanServer<S, L> {
+    /// Registers a new command
+    ///
+    /// Takes register-sensitive `cmd_name` and a `handler` that will actually process incoming
+    /// requests.
     pub fn add_command<E>(
         self,
         cmd_name: &'static str,
@@ -115,6 +128,9 @@ impl<S, L: router::CmdList<S>> AssuanServer<S, L> {
         }
     }
 
+    /// Serves a client: reads the requests from `read` and writes the responses to `write`
+    ///
+    /// Incoming requests will be routed between registered commands
     pub fn serve_client<R, W>(&mut self, read: R, write: W) -> io::Result<()>
     where
         R: io::Read,
@@ -123,6 +139,7 @@ impl<S, L: router::CmdList<S>> AssuanServer<S, L> {
         self.serve_client_conn(&mut Conn { read, write })
     }
 
+    /// Server a client: reads the requests and writes the responses to `conn`
     pub fn serve_client_conn<C>(&mut self, conn: &mut C) -> io::Result<()>
     where
         C: io::Read + io::Write,

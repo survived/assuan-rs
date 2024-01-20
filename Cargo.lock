@@ -3,11 +3,7 @@
 version = 3
 
 [[package]]
-name = "assuan-hijack"
-version = "0.1.0"
-
-[[package]]
-name = "assuan-server"
+name = "assuan"
 version = "0.1.0"
 dependencies = [
  "either",
@@ -15,6 +11,10 @@ dependencies = [
  "rand_dev",
  "zeroize",
 ]
+
+[[package]]
+name = "assuan-hijack"
+version = "0.1.0"
 
 [[package]]
 name = "bitflags"
@@ -84,14 +84,14 @@ checksum = "b8f8bdf33df195859076e54ab11ee78a1b208382d3a26ec40d142ffc1ecc49ef"
 name = "pinentry"
 version = "0.1.0"
 dependencies = [
- "assuan-server",
+ "assuan",
 ]
 
 [[package]]
 name = "pinentry-tty"
 version = "0.1.0"
 dependencies = [
- "assuan-server",
+ "assuan",
  "either",
  "pinentry",
  "termion",

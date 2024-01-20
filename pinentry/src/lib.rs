@@ -1,12 +1,26 @@
+//! Helps implementing a pinentry server
+//!
+//! This crate provides a [`PinentryServer`] that takes the most boilerplate of implementing
+//! pinentry server, requiring only to implement the [core operations](PinentryCmds) defining
+//! how to ask user for [PIN](PinentryCmds::get_pin) and for [confirmation](PinentryCmds::confirm)
+
 #![forbid(unused_crate_dependencies)]
+#![deny(missing_docs)]
 
 use core::fmt;
 
-pub use assuan_server::{
+#[doc(no_inline)]
+pub use assuan::{
+    self,
     response::{Response, SecretData},
-    AssuanServer, HasErrorCode,
+    HasErrorCode,
 };
 
+/// Pinentry server
+///
+/// Wraps a minimalistic [`PinentryCmds` trait](PinentryCmds) that tells how actually PIN should be
+/// obtained from the user, and provides implementation of fully-functional pinentry server that
+/// follows the Assuan protocol, receives and recognizes the commands, and so on.
 pub struct PinentryServer<S: PinentryCmds> {
     cmds: S,
 
@@ -21,16 +35,41 @@ pub struct PinentryServer<S: PinentryCmds> {
     error_text: Option<String>,
 }
 
+/// Buttons that should be displayed in [confirmation dialog](PinentryCmds::confirm)
 pub struct Buttons<'a> {
+    /// OK button, suggesting user to give consent
     pub ok: &'a str,
+    /// Not OK button, suggesting user to refuse to whatever is asked
     pub not_ok: Option<&'a str>,
+    /// Cancel button, suggesting user to abort the operation
     pub cancel: Option<&'a str>,
 }
 
+/// The core of pinentry server: [retrieving pin](Self::get_pin) from the user, and showing the
+/// [confirmation prompt](Self::confirm)
+///
+/// [`PinentryServer`] requires this commands to be defined by the library user in order to provide
+/// a fully functional pinentry server.
 pub trait PinentryCmds {
+    /// Error returned by the commands
     type Error: HasErrorCode + fmt::Display;
 
+    /// Tells that pinentry was asked to use the given TTY
     fn set_tty(&mut self, path: std::path::PathBuf) -> Result<(), Self::Error>;
+
+    /// Asks user to enter PIN
+    ///
+    /// # Inputs
+    /// * `error` is `Some(_)` if some message containing error description needs to be displayed to
+    ///   user before prompting PIN
+    /// * `window_title` is suggested title of the window
+    /// * `desc`, if present, contains more detailed information of why and/or what for PIN is required
+    /// * `prompt` is short text that should be displayed right before to where PIN in entered
+    ///
+    /// # Outputs
+    /// * `Ok(Some(pin))` if user entered a pin
+    /// * `Ok(None)` if user aborted the prompt (e.g. pressed `Ctrl-C` or closed the window)
+    /// * `Err(err)` if any unexpected error occurred
 
     fn get_pin(
         &mut self,
@@ -40,19 +79,36 @@ pub trait PinentryCmds {
         prompt: &str,
     ) -> Result<Option<SecretData>, Self::Error>;
 
+    /// Asks user to confirm action
+    ///
+    /// # Inputs
+    /// * `error` is `Some(_)` if some message containing error description needs to be displayed to
+    ///   user before asking for confirmation
+    /// * `window_title` is suggested title of the window
+    /// * `desc`, if present, contains more detailed information of what to be confirmed
+    /// * `buttons` are the buttons that should be prompted to the user
+    ///
+    /// # Outputs
+    /// Function should return whichever `button` user pressed. For instance, if [`buttons.ok`](Buttons::ok)
+    /// was pressed, [`ConfirmChoice::Ok`] should be returned). If user aborted the confirmation (e.g. by
+    /// pressing `Ctrl-C` or closing the window), [`ConfirmChoice::Canceled`] should be returned.
     fn confirm(
         &mut self,
         error: Option<&str>,
         window_title: &str,
         desc: Option<&str>,
         buttons: Buttons,
-    ) -> Result<ConfirmAction, Self::Error>;
+    ) -> Result<ConfirmChoice, Self::Error>;
 }
 
+/// Choice of the user in [confirm dialog](PinentryCmds::confirm)
 #[derive(Debug, Clone, Copy)]
-pub enum ConfirmAction {
+pub enum ConfirmChoice {
+    /// User gave consent
     Ok,
+    /// User aborted the operation
     Canceled,
+    /// User refused to whatever was asked
     NotOk,
 }
 
@@ -72,6 +128,7 @@ macro_rules! define_setters {
 }
 
 impl<S: PinentryCmds> PinentryServer<S> {
+    /// Constructs a pinentry server
     pub fn new(cmds: S) -> Self {
         Self {
             cmds,
@@ -85,10 +142,11 @@ impl<S: PinentryCmds> PinentryServer<S> {
         }
     }
 
+    /// Builds an assuan server ready to serve requests from the client
     pub fn build_assuan_server(
         self,
-    ) -> assuan_server::AssuanServer<Self, impl assuan_server::router::CmdList<Self>> {
-        assuan_server::AssuanServer::new(self)
+    ) -> assuan::AssuanServer<Self, impl assuan::router::CmdList<Self>> {
+        assuan::AssuanServer::new(self)
             .add_command("OPTION", Self::option)
             .add_command("SETTIMEOUT", Self::not_currently_supported)
             .add_command("SETDESC", Self::set_desc)
@@ -149,9 +207,9 @@ impl<S: PinentryCmds> PinentryServer<S> {
             )
             .map_err(HandleError::PinentryCmd)?;
         match response {
-            ConfirmAction::Ok => Ok(Response::ok()),
-            ConfirmAction::NotOk => Err(HandleError::ConfirmRefused),
-            ConfirmAction::Canceled => Err(HandleError::ConfirmCancelled),
+            ConfirmChoice::Ok => Ok(Response::ok()),
+            ConfirmChoice::NotOk => Err(HandleError::ConfirmRefused),
+            ConfirmChoice::Canceled => Err(HandleError::ConfirmCancelled),
         }
     }
 
@@ -207,7 +265,7 @@ impl<S: PinentryCmds> PinentryServer<S> {
 
 #[derive(Debug)]
 enum HandleError<E> {
-    DebugInfoTooLong(assuan_server::response::TooLong),
+    DebugInfoTooLong(assuan::response::TooLong),
     ConfirmRefused,
     ConfirmCancelled,
     NoPin,
@@ -227,19 +285,19 @@ impl<E: fmt::Display> fmt::Display for HandleError<E> {
 }
 
 impl<E: HasErrorCode> HasErrorCode for HandleError<E> {
-    fn code(&self) -> assuan_server::ErrorCode {
+    fn code(&self) -> assuan::ErrorCode {
         match self {
-            HandleError::DebugInfoTooLong(_) => assuan_server::ErrorCode::INTERNAL,
-            HandleError::ConfirmRefused => assuan_server::ErrorCode::NOT_CONFIRMED,
-            HandleError::ConfirmCancelled => assuan_server::ErrorCode::CANCELED,
-            HandleError::NoPin => assuan_server::ErrorCode::NO_PIN,
+            HandleError::DebugInfoTooLong(_) => assuan::ErrorCode::INTERNAL,
+            HandleError::ConfirmRefused => assuan::ErrorCode::NOT_CONFIRMED,
+            HandleError::ConfirmCancelled => assuan::ErrorCode::CANCELED,
+            HandleError::NoPin => assuan::ErrorCode::NO_PIN,
             HandleError::PinentryCmd(err) => err.code(),
         }
     }
 }
 
-impl<E> From<assuan_server::response::TooLong> for HandleError<E> {
-    fn from(err: assuan_server::response::TooLong) -> Self {
+impl<E> From<assuan::response::TooLong> for HandleError<E> {
+    fn from(err: assuan::response::TooLong) -> Self {
         Self::DebugInfoTooLong(err)
     }
 }

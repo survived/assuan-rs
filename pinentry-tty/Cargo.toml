@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-assuan-server = { path = "../assuan-server", optional = true }
+assuan = { path = "../assuan", optional = true }
 pinentry = { path = "../pinentry", optional = true }
 
 termion = { version = "3", optional = true }
@@ -15,7 +15,7 @@ zeroize = "1"
 
 [features]
 default = ["termion"]
-server = ["assuan-server", "pinentry", "termion"]
+server = ["assuan", "pinentry", "termion"]
 termion = ["dep:termion"]
 
 [[bin]]

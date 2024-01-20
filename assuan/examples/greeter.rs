@@ -1,4 +1,4 @@
-use assuan_server::response::{Data, Response, TooLong};
+use assuan::response::{Data, Response, TooLong};
 
 struct Greeter {
     my_name: &'static str,
@@ -17,7 +17,7 @@ impl Greeter {
 fn main() -> std::io::Result<()> {
     let greeter = Greeter { my_name: "Alice" };
 
-    assuan_server::AssuanServer::new(greeter)
+    assuan::AssuanServer::new(greeter)
         .add_command("GREET", Greeter::greet)
         .serve_client(std::io::stdin(), std::io::stdout())
 }
