@@ -30,7 +30,7 @@ pub mod terminal;
 /// Builds Assuan server that implements a pinentry-tty tool
 ///
 /// Alias for wrapping [server::PinentryTty] into [pinentry::PinentryServer] and
-/// converting into [assuan_server::AssuanServer].
+/// converting into [assuan::AssuanServer].
 ///
 /// ### Example
 /// Launch a pinentry-tty server that accepts commands from stdin and writes responses
@@ -39,9 +39,9 @@ pub mod terminal;
 #[doc = include_str!("main.rs")]
 /// ```
 #[cfg(feature = "server")]
-pub fn server() -> assuan_server::AssuanServer<
+pub fn server() -> assuan::AssuanServer<
     pinentry::PinentryServer<server::PinentryTty>,
-    impl assuan_server::router::CmdList<pinentry::PinentryServer<server::PinentryTty>>,
+    impl assuan::router::CmdList<pinentry::PinentryServer<server::PinentryTty>>,
 > {
     pinentry::PinentryServer::new(server::PinentryTty::default()).build_assuan_server()
 }
@@ -183,7 +183,7 @@ pub trait PushPop<T> {
 }
 
 #[cfg(feature = "server")]
-impl PushPop<char> for assuan_server::response::SecretData {
+impl PushPop<char> for assuan::response::SecretData {
     fn push(&mut self, x: char) -> Result<(), char> {
         (**self).push(x).map_err(|_| x)
     }

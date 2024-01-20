@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use assuan_server::response::SecretData;
+use assuan::response::SecretData;
 use either::Either;
 
 use crate::terminal::Tui;
@@ -120,7 +120,7 @@ enum Reason {
 
 #[derive(Debug)]
 enum InternalError {
-    DebugInfoTooLong(assuan_server::response::TooLong),
+    DebugInfoTooLong(assuan::response::TooLong),
 }
 
 impl fmt::Display for Error {
@@ -146,17 +146,17 @@ impl fmt::Display for InternalError {
     }
 }
 
-impl assuan_server::HasErrorCode for Error {
-    fn code(&self) -> assuan_server::ErrorCode {
+impl assuan::HasErrorCode for Error {
+    fn code(&self) -> assuan::ErrorCode {
         match self {
-            Error(Reason::OpenTty(_)) => assuan_server::ErrorCode::ASS_GENERAL,
-            Error(Reason::WriteTty(_)) => assuan_server::ErrorCode::ASS_GENERAL,
-            Error(Reason::ReadTty(_)) => assuan_server::ErrorCode::ASS_GENERAL,
-            Error(Reason::RawMode(_)) => assuan_server::ErrorCode::ASS_GENERAL,
-            Error(Reason::Dialog(_)) => assuan_server::ErrorCode::ASS_GENERAL,
-            Error(Reason::OutputNotTty) => assuan_server::ErrorCode::ASS_GENERAL,
-            Error(Reason::PinTooLong) => assuan_server::ErrorCode::TOO_LARGE,
-            Error(Reason::Internal(_)) => assuan_server::ErrorCode::INTERNAL,
+            Error(Reason::OpenTty(_)) => assuan::ErrorCode::ASS_GENERAL,
+            Error(Reason::WriteTty(_)) => assuan::ErrorCode::ASS_GENERAL,
+            Error(Reason::ReadTty(_)) => assuan::ErrorCode::ASS_GENERAL,
+            Error(Reason::RawMode(_)) => assuan::ErrorCode::ASS_GENERAL,
+            Error(Reason::Dialog(_)) => assuan::ErrorCode::ASS_GENERAL,
+            Error(Reason::OutputNotTty) => assuan::ErrorCode::ASS_GENERAL,
+            Error(Reason::PinTooLong) => assuan::ErrorCode::TOO_LARGE,
+            Error(Reason::Internal(_)) => assuan::ErrorCode::INTERNAL,
         }
     }
 }
@@ -173,8 +173,8 @@ impl From<InternalError> for Error {
     }
 }
 
-impl From<assuan_server::response::TooLong> for Error {
-    fn from(err: assuan_server::response::TooLong) -> Self {
+impl From<assuan::response::TooLong> for Error {
+    fn from(err: assuan::response::TooLong) -> Self {
         Self(Reason::Internal(InternalError::DebugInfoTooLong(err)))
     }
 }

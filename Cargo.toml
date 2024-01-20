@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-  "assuan-server",
+  "assuan",
   "assuan-hijack",
   "pinentry",
   "pinentry-tty",

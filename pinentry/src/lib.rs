@@ -2,7 +2,7 @@
 
 use core::fmt;
 
-pub use assuan_server::{
+pub use assuan::{
     response::{Response, SecretData},
     AssuanServer, HasErrorCode,
 };
@@ -87,8 +87,8 @@ impl<S: PinentryCmds> PinentryServer<S> {
 
     pub fn build_assuan_server(
         self,
-    ) -> assuan_server::AssuanServer<Self, impl assuan_server::router::CmdList<Self>> {
-        assuan_server::AssuanServer::new(self)
+    ) -> assuan::AssuanServer<Self, impl assuan::router::CmdList<Self>> {
+        assuan::AssuanServer::new(self)
             .add_command("OPTION", Self::option)
             .add_command("SETTIMEOUT", Self::not_currently_supported)
             .add_command("SETDESC", Self::set_desc)
@@ -207,7 +207,7 @@ impl<S: PinentryCmds> PinentryServer<S> {
 
 #[derive(Debug)]
 enum HandleError<E> {
-    DebugInfoTooLong(assuan_server::response::TooLong),
+    DebugInfoTooLong(assuan::response::TooLong),
     ConfirmRefused,
     ConfirmCancelled,
     NoPin,
@@ -227,19 +227,19 @@ impl<E: fmt::Display> fmt::Display for HandleError<E> {
 }
 
 impl<E: HasErrorCode> HasErrorCode for HandleError<E> {
-    fn code(&self) -> assuan_server::ErrorCode {
+    fn code(&self) -> assuan::ErrorCode {
         match self {
-            HandleError::DebugInfoTooLong(_) => assuan_server::ErrorCode::INTERNAL,
-            HandleError::ConfirmRefused => assuan_server::ErrorCode::NOT_CONFIRMED,
-            HandleError::ConfirmCancelled => assuan_server::ErrorCode::CANCELED,
-            HandleError::NoPin => assuan_server::ErrorCode::NO_PIN,
+            HandleError::DebugInfoTooLong(_) => assuan::ErrorCode::INTERNAL,
+            HandleError::ConfirmRefused => assuan::ErrorCode::NOT_CONFIRMED,
+            HandleError::ConfirmCancelled => assuan::ErrorCode::CANCELED,
+            HandleError::NoPin => assuan::ErrorCode::NO_PIN,
             HandleError::PinentryCmd(err) => err.code(),
         }
     }
 }
 
-impl<E> From<assuan_server::response::TooLong> for HandleError<E> {
-    fn from(err: assuan_server::response::TooLong) -> Self {
+impl<E> From<assuan::response::TooLong> for HandleError<E> {
+    fn from(err: assuan::response::TooLong) -> Self {
         Self::DebugInfoTooLong(err)
     }
 }
