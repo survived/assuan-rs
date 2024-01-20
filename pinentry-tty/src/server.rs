@@ -55,17 +55,17 @@ impl pinentry::PinentryCmds for PinentryTty {
         window_title: &str,
         desc: Option<&str>,
         buttons: pinentry::Buttons,
-    ) -> Result<pinentry::ConfirmAction, Self::Error> {
+    ) -> Result<pinentry::ConfirmChoice, Self::Error> {
         let mut tty = self.open_tty()?;
 
         let mut options = Vec::with_capacity(3);
-        options.push((buttons.ok, pinentry::ConfirmAction::Ok));
+        options.push((buttons.ok, pinentry::ConfirmChoice::Ok));
 
         if let Some(not_ok) = buttons.not_ok {
-            options.push((not_ok, pinentry::ConfirmAction::NotOk));
+            options.push((not_ok, pinentry::ConfirmChoice::NotOk));
         }
         if let Some(cancel) = buttons.cancel {
-            options.push((cancel, pinentry::ConfirmAction::Canceled));
+            options.push((cancel, pinentry::ConfirmChoice::Canceled));
         }
 
         let choice = tty.dialog(
@@ -76,7 +76,7 @@ impl pinentry::PinentryCmds for PinentryTty {
             },
             &options,
         )?;
-        Ok(*choice.unwrap_or(&pinentry::ConfirmAction::Canceled))
+        Ok(*choice.unwrap_or(&pinentry::ConfirmChoice::Canceled))
     }
 }
 
